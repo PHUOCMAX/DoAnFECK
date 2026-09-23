@@ -1,37 +1,23 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-
 import pool from "./config/db.js";
-import authRoutes from "./routes/authRoutes.js";
-dotenv.config();
+import { createApp } from "./app.js";
+import { env, validateEnvironment } from "./config/env.js";
 
-const app = express();
+validateEnvironment();
 
-app.use(cors());
-app.use(express.json());
-app.use("/api/auth", authRoutes);
-app.get("/api/health", async (req, res) => {
-  try {
-    const [rows] = await pool.query("SELECT 1 AS result");
+const app = createApp();
 
-    res.json({
-      success: true,
-      message: "Backend and MySQL are connected",
-      database: rows[0].result === 1,
-    });
-  } catch (error) {
-    console.error("Database error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Database connection failed",
-    });
-  }
+const server = app.listen(env.port, "0.0.0.0", () => {
+  console.log(`Backend running at http://0.0.0.0:${env.port}`);
 });
 
-const PORT = process.env.PORT || 5000;
+function shutdown(signal) {
+  console.log(`${signal} received. Closing server...`);
 
-app.listen(PORT, () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
-});
+  server.close(async () => {
+    await pool.end();
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

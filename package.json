@@ -1,0 +1,18 @@
+{
+  "name": "multilingual-tour-guide",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:start": "npm --prefix backend run start",
+    "mobile:start": "npm --prefix frontend/mobile run start",
+    "mobile:android": "npm --prefix frontend/mobile run android",
+    "mobile:ios": "npm --prefix frontend/mobile run ios",
+    "web:dev": "npm --prefix frontend/web run dev",
+    "web:build": "npm --prefix frontend/web run build",
+    "check": "npm --prefix backend run test && npm --prefix frontend/mobile run typecheck && npm --prefix frontend/web run lint"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

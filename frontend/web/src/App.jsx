@@ -1,31 +1,38 @@
-import { LANGUAGES } from "@shared/constants/languages";
-import { INITIAL_POIS } from "@shared/constants/initialPois";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+} from "react-router-dom";
+
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 function App() {
   return (
-    <div>
-      <h1>Multilingual Tour Guide</h1>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/admin/login"
+          element={<AdminLogin />}
+        />
 
-      <h2>Languages</h2>
+        <Route
+          path="/admin"
+          element={<AdminDashboard />}
+        />
 
-      {LANGUAGES.map((language) => (
-        <p key={language.code}>
-          {language.code} - {language.name}
-        </p>
-      ))}
-
-      <h2>POI</h2>
-
-      {INITIAL_POIS.map((poi) => (
-        <div key={poi.id}>
-          <p>{poi.name.vi}</p>
-          <p>{poi.description.vi}</p>
-          <p>
-            GPS: {poi.latitude}, {poi.longitude}
-          </p>
-        </div>
-      ))}
-    </div>
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/admin/login"
+              replace
+            />
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

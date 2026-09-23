@@ -1,26 +1,27 @@
 import bcrypt from "bcryptjs";
 import pool from "../config/db.js";
 import jwt from "jsonwebtoken";
+import { env } from "../config/env.js";
+import {
+  normalizeEmail,
+  validateLoginPayload,
+  validateRegistrationPayload,
+} from "../utils/authValidation.js";
 
 export async function register(req, res) {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password } = req.body ?? {};
 
-    if (!name || !email || !password) {
+    const validationError = validateRegistrationPayload(req.body);
+
+    if (validationError) {
       return res.status(400).json({
         success: false,
-        message: "Vui lòng nhập đầy đủ thông tin.",
+        message: validationError,
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "Mật khẩu phải có ít nhất 6 ký tự.",
-      });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
     const [existingUsers] = await pool.query(
       "SELECT id FROM users WHERE email = ?",
@@ -34,7 +35,7 @@ export async function register(req, res) {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const [result] = await pool.query(
       `INSERT INTO users (name, email, password)
@@ -49,6 +50,7 @@ export async function register(req, res) {
         id: result.insertId,
         name: name.trim(),
         email: normalizedEmail,
+        role: "user",
       },
     });
   } catch (error) {
@@ -62,19 +64,21 @@ export async function register(req, res) {
 }
 export async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body ?? {};
 
-    if (!email || !password) {
+    const validationError = validateLoginPayload(req.body);
+
+    if (validationError) {
       return res.status(400).json({
         success: false,
-        message: "Vui lòng nhập email và mật khẩu.",
+        message: validationError,
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
 
     const [users] = await pool.query(
-      "SELECT id, name, email, password FROM users WHERE email = ?",
+      "SELECT id, name, email, password, role FROM users WHERE email = ?",
       [normalizedEmail]
     );
 
@@ -104,7 +108,7 @@ export async function login(req, res) {
         userId: user.id,
         email: user.email,
       },
-      process.env.JWT_SECRET,
+      env.jwtSecret,
       {
         expiresIn: "7d",
       }
@@ -118,10 +122,39 @@ export async function login(req, res) {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
     console.error("Login error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server.",
+    });
+  }
+}
+
+export async function getCurrentUser(req, res) {
+  try {
+    const [users] = await pool.query(
+      "SELECT id, name, email, role FROM users WHERE id = ?",
+      [req.auth.userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy người dùng.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: users[0],
+    });
+  } catch (error) {
+    console.error("Get current user error:", error);
 
     return res.status(500).json({
       success: false,
