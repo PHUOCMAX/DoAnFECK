@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install backend dependencies
+        run: npm --prefix backend install
+
+      - name: Install mobile dependencies
+        run: npm --prefix frontend/mobile install
+
+      - name: Install web dependencies
+        run: npm --prefix frontend/web install
+
+      - name: Backend tests
+        run: npm --prefix backend run test
+
+      - name: Mobile typecheck
+        run: npm --prefix frontend/mobile run typecheck
+
+      - name: Web lint
+        run: npm --prefix frontend/web run lint
+
+      - name: Web build
+        run: npm --prefix frontend/web run build
