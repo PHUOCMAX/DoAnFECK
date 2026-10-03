@@ -1,7 +1,7 @@
 export const LANGUAGES = [
   {
     code: "vi",
-    name: "Tiếng Việt",
+    name: "Vietnamese",
     nativeName: "Tiếng Việt",
     flag: "🇻🇳",
   },
@@ -16,5 +16,77 @@ export const LANGUAGES = [
     name: "Chinese",
     nativeName: "中文",
     flag: "🇨🇳",
+  },
+  {
+    code: "ja",
+    name: "Japanese",
+    nativeName: "日本語",
+    flag: "🇯🇵",
+  },
+  {
+    code: "ko",
+    name: "Korean",
+    nativeName: "한국어",
+    flag: "🇰🇷",
+  },
+  {
+    code: "fr",
+    name: "French",
+    nativeName: "Français",
+    flag: "🇫🇷",
+  },
+  {
+    code: "de",
+    name: "German",
+    nativeName: "Deutsch",
+    flag: "🇩🇪",
+  },
+  {
+    code: "es",
+    name: "Spanish",
+    nativeName: "Español",
+    flag: "🇪🇸",
+  },
+  {
+    code: "it",
+    name: "Italian",
+    nativeName: "Italiano",
+    flag: "🇮🇹",
+  },
+  {
+    code: "pt",
+    name: "Portuguese",
+    nativeName: "Português",
+    flag: "🇵🇹",
+  },
+  {
+    code: "ru",
+    name: "Russian",
+    nativeName: "Русский",
+    flag: "🇷🇺",
+  },
+  {
+    code: "th",
+    name: "Thai",
+    nativeName: "ไทย",
+    flag: "🇹🇭",
+  },
+  {
+    code: "id",
+    name: "Indonesian",
+    nativeName: "Bahasa Indonesia",
+    flag: "🇮🇩",
+  },
+  {
+    code: "ms",
+    name: "Malay",
+    nativeName: "Bahasa Melayu",
+    flag: "🇲🇾",
+  },
+  {
+    code: "hi",
+    name: "Hindi",
+    nativeName: "हिन्दी",
+    flag: "🇮🇳",
   },
 ];

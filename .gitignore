@@ -47,4 +47,5 @@ ios/Pods/
 ios/build/
 
 # Metro
-.metro-health-check*
+.metro-health-check*backend/uploads/
+backend/uploads/

@@ -4,6 +4,7 @@ export type PoiCategory = "tourism" | "food";
 export type PoiStatus = "pending" | "approved" | "rejected";
 
 export interface LocalizedText {
+  [language: string]: string;
   vi: string;
   en: string;
   zh: string;
@@ -11,23 +12,14 @@ export interface LocalizedText {
 
 export interface Poi {
   id: number;
-
   name: LocalizedText;
-
   description: LocalizedText;
-
   city: string;
-
   category: PoiCategory;
-
   latitude: number;
-
   longitude: number;
-
   radius: number;
-
   image: string;
-
   audio: LocalizedText;
   status?: PoiStatus;
 }
@@ -40,6 +32,8 @@ export interface CreatePoiRequest {
   latitude: number;
   longitude: number;
   radius: number;
+  image?: string;
+  audio?: LocalizedText;
 }
 
 export interface PoisResponse {

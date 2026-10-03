@@ -38,3 +38,24 @@ test("rejects invalid POI coordinates and radius", () => {
     "Bán kính check-in phải từ 10 đến 1000 mét."
   );
 });
+
+
+test("preserves optional image and multilingual audio", () => {
+  const result = validatePoiPayload({
+    ...validPoi,
+    image: "/images/poi-1.jpg",
+    audio: {
+      vi: "/audio/poi-1-vi.mp3",
+      en: "/audio/poi-1-en.mp3",
+      zh: "/audio/poi-1-zh.mp3",
+    },
+  });
+
+  assert.equal(result.error, undefined);
+  assert.equal(result.value.image, "/images/poi-1.jpg");
+  assert.deepEqual(result.value.audio, {
+    vi: "/audio/poi-1-vi.mp3",
+    en: "/audio/poi-1-en.mp3",
+    zh: "/audio/poi-1-zh.mp3",
+  });
+});

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ShieldCheck } from "lucide-react";
+
 import { adminLogin } from "../../services/adminService";
 
 function AdminLogin() {
@@ -42,165 +44,99 @@ function AdminLogin() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.logo}>
-          TG
-        </div>
-
-        <h1 style={styles.title}>
-          Admin Login
-        </h1>
-
-        <p style={styles.subtitle}>
-          Multilingual Tour Guide
-        </p>
-
-        <form onSubmit={handleSubmit}>
-          <div style={styles.field}>
-            <label style={styles.label}>
-              Email
-            </label>
-
-            <input
-              type="email"
-              value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
-              }
-              placeholder="admin@example.com"
-              required
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.field}>
-            <label style={styles.label}>
-              Mật khẩu
-            </label>
-
-            <input
-              type="password"
-              value={password}
-              onChange={(event) =>
-                setPassword(event.target.value)
-              }
-              placeholder="Nhập mật khẩu"
-              required
-              style={styles.input}
-            />
-          </div>
-
-          {error && (
-            <div style={styles.error}>
-              {error}
+    <main className="min-h-screen bg-slate-100 px-4 py-8 sm:px-6">
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
+        <div className="w-full max-w-md">
+          {/* Logo */}
+          <div className="mb-6 flex justify-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg">
+              <ShieldCheck size={28} strokeWidth={2} />
             </div>
-          )}
+          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              ...styles.button,
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading
-              ? "Đang đăng nhập..."
-              : "Đăng nhập Admin"}
-          </button>
-        </form>
+          {/* Card */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl sm:p-8">
+            <div className="mb-8 text-center">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Admin Login
+              </h1>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Multilingual Tour Guide
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Email */}
+              <div>
+                <label
+                  htmlFor="admin-email"
+                  className="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Email
+                </label>
+
+                <input
+                  id="admin-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="admin@example.com"
+                  autoComplete="email"
+                  required
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label
+                  htmlFor="admin-password"
+                  className="mb-2 block text-sm font-medium text-slate-700"
+                >
+                  Mật khẩu
+                </label>
+
+                <input
+                  id="admin-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Nhập mật khẩu"
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                />
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                >
+                  {error}
+                </div>
+              )}
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Đang đăng nhập..." : "Đăng nhập Admin"}
+              </button>
+            </form>
+          </section>
+
+          <p className="mt-6 text-center text-xs text-slate-400">
+            Multilingual Tour Guide Admin
+          </p>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    background: "#f3f4f6",
-    padding: 20,
-  },
-
-  card: {
-    width: "100%",
-    maxWidth: 420,
-    background: "#ffffff",
-    borderRadius: 16,
-    padding: 36,
-    boxShadow: "0 12px 40px rgba(0, 0, 0, 0.08)",
-  },
-
-  logo: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    background: "#111827",
-    color: "#ffffff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 700,
-    fontSize: 18,
-    marginBottom: 20,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: 28,
-    color: "#111827",
-  },
-
-  subtitle: {
-    marginTop: 8,
-    marginBottom: 30,
-    color: "#6b7280",
-  },
-
-  field: {
-    marginBottom: 18,
-  },
-
-  label: {
-    display: "block",
-    marginBottom: 8,
-    fontWeight: 600,
-    color: "#374151",
-  },
-
-  input: {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "12px 14px",
-    border: "1px solid #d1d5db",
-    borderRadius: 8,
-    fontSize: 15,
-    outline: "none",
-  },
-
-  error: {
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 8,
-    background: "#fee2e2",
-    color: "#b91c1c",
-    fontSize: 14,
-  },
-
-  button: {
-    width: "100%",
-    padding: "13px 16px",
-    border: "none",
-    borderRadius: 8,
-    background: "#111827",
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-};
 
 export default AdminLogin;
