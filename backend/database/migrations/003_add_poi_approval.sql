@@ -1,12 +1,15 @@
 ALTER TABLE users
-  ADD COLUMN role ENUM('user', 'admin') NOT NULL DEFAULT 'user' AFTER password;
+  ADD role VARCHAR(10) NOT NULL CONSTRAINT CK_users_role CHECK (role IN ('user', 'admin')) DEFAULT 'user';
 
 ALTER TABLE pois
-  ADD COLUMN status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' AFTER created_by,
-  ADD COLUMN reviewed_by INT NULL AFTER status,
-  ADD COLUMN reviewed_at TIMESTAMP NULL AFTER reviewed_by,
-  ADD KEY pois_status_index (status),
-  ADD KEY pois_reviewed_by_index (reviewed_by),
-  ADD CONSTRAINT pois_reviewed_by_foreign
+  ADD status VARCHAR(20) NOT NULL CONSTRAINT CK_pois_status CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+      reviewed_by INT NULL,
+      reviewed_at DATETIME NULL;
+
+CREATE INDEX IX_pois_status ON pois (status);
+CREATE INDEX IX_pois_reviewed_by ON pois (reviewed_by);
+
+ALTER TABLE pois
+  ADD CONSTRAINT FK_pois_reviewed_by
     FOREIGN KEY (reviewed_by) REFERENCES users(id)
     ON DELETE SET NULL;

@@ -1,9 +1,16 @@
 import pool from "../config/db.js";
+
 import {
   SUPPORTED_LANGUAGES,
   validatePoiPayload,
 } from "../utils/poiValidation.js";
+
 import { translatePoiContent } from "../services/translationService.js";
+
+import {
+  indexPoi,
+  deletePoiVector,
+} from "../services/vectorService.js";
 
 const POI_COLUMNS = `
   id,
@@ -70,6 +77,7 @@ function buildPoi(row, translations = []) {
     createdBy: row.created_by,
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
+
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -78,15 +86,15 @@ function buildPoi(row, translations = []) {
 async function getTranslationsForPoi(poiId) {
   const [rows] = await pool.execute(
     `
-    SELECT
-      poi_id,
-      language_code,
-      name,
-      description,
-      audio
-    FROM poi_translations
-    WHERE poi_id = ?
-    ORDER BY language_code ASC
+      SELECT
+        poi_id,
+        language_code,
+        name,
+        description,
+        audio
+      FROM poi_translations
+      WHERE poi_id = ?
+      ORDER BY language_code ASC
     `,
     [poiId]
   );
@@ -97,9 +105,9 @@ async function getTranslationsForPoi(poiId) {
 async function getPoiById(poiId) {
   const [rows] = await pool.execute(
     `
-    SELECT ${POI_COLUMNS}
-    FROM pois
-    WHERE id = ?
+      SELECT ${POI_COLUMNS}
+      FROM pois
+      WHERE id = ?
     `,
     [poiId]
   );
@@ -133,14 +141,14 @@ async function insertTranslations(
 
     await connection.execute(
       `
-      INSERT INTO poi_translations (
-        poi_id,
-        language_code,
-        name,
-        description,
-        audio
-      )
-      VALUES (?, ?, ?, ?, ?)
+        INSERT INTO poi_translations (
+          poi_id,
+          language_code,
+          name,
+          description,
+          audio
+        )
+        VALUES (?, ?, ?, ?, ?)
       `,
       [
         poiId,
@@ -169,18 +177,19 @@ async function updateTranslations(
 
     await connection.execute(
       `
-      INSERT INTO poi_translations (
-        poi_id,
-        language_code,
-        name,
-        description,
-        audio
-      )
-      VALUES (?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        name = VALUES(name),
-        description = VALUES(description),
-        audio = VALUES(audio)
+        INSERT INTO poi_translations (
+          poi_id,
+          language_code,
+          name,
+          description,
+          audio
+        )
+        VALUES (?, ?, ?, ?, ?)
+
+        ON DUPLICATE KEY UPDATE
+          name = VALUES(name),
+          description = VALUES(description),
+          audio = VALUES(audio)
       `,
       [
         poiId,
@@ -196,18 +205,15 @@ async function updateTranslations(
 /**
  * Lấy dữ liệu POI từ request.
  *
- * Khi request là multipart/form-data:
- *
+ * Multipart:
  * req.body = {
- *   data: '{"name":{"vi":"..."},...}'
+ *   data: '{"name":...}'
  * }
  *
- * Khi request vẫn là JSON:
- *
+ * JSON:
  * req.body = {
  *   name: {...},
- *   description: {...},
- *   ...
+ *   description: {...}
  * }
  */
 function getPoiPayload(req) {
@@ -224,6 +230,68 @@ function getPoiPayload(req) {
   return req.body;
 }
 
+/**
+ * Tạo dữ liệu phẳng để index vào Qdrant.
+ */
+function buildVectorPoi({
+  id,
+  translations,
+  poi,
+}) {
+  return {
+    id: Number(id),
+
+    name_vi:
+      translations.vi?.name ||
+      poi.name.vi ||
+      "",
+
+    name_en:
+      translations.en?.name ||
+      translations.vi?.name ||
+      poi.name.vi ||
+      "",
+
+    name_zh:
+      translations.zh?.name ||
+      translations.vi?.name ||
+      poi.name.vi ||
+      "",
+
+    description_vi:
+      translations.vi?.description ||
+      poi.description.vi ||
+      "",
+
+    description_en:
+      translations.en?.description ||
+      translations.vi?.description ||
+      poi.description.vi ||
+      "",
+
+    description_zh:
+      translations.zh?.description ||
+      translations.vi?.description ||
+      poi.description.vi ||
+      "",
+
+    city: poi.city || "",
+    category: poi.category || "",
+
+    latitude: poi.latitude,
+    longitude: poi.longitude,
+    radius: poi.radius,
+
+    image: poi.image || null,
+
+    status: "approved",
+  };
+}
+
+/* =========================================================
+   CREATE POI
+========================================================= */
+
 export async function createAdminPoi(
   req,
   res
@@ -233,9 +301,7 @@ export async function createAdminPoi(
       getPoiPayload(req);
 
     /*
-     * Nếu Admin chọn ảnh,
-     * multer đã lưu file và đưa thông tin
-     * vào req.file.
+     * Nếu Admin chọn ảnh
      */
     if (req.file) {
       payload.image =
@@ -254,7 +320,7 @@ export async function createAdminPoi(
     const poi = validation.value;
 
     /*
-     * Dịch từ Tiếng Việt
+     * Dịch từ tiếng Việt
      * sang 15 ngôn ngữ.
      */
     const translations =
@@ -264,36 +330,39 @@ export async function createAdminPoi(
           poi.description.vi,
       });
 
+    /*
+     * Lưu POI.
+     */
     const [result] =
       await pool.query(
         `
-        INSERT INTO pois (
-          name_vi,
-          name_en,
-          name_zh,
-          description_vi,
-          description_en,
-          description_zh,
-          city,
-          category,
-          latitude,
-          longitude,
-          radius,
-          image,
-          created_by,
-          status,
-          reviewed_by,
-          reviewed_at
-        )
-        VALUES (
-          ?, ?, ?,
-          ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
-          ?,
-          'approved',
-          ?,
-          CURRENT_TIMESTAMP
-        )
+          INSERT INTO pois (
+            name_vi,
+            name_en,
+            name_zh,
+            description_vi,
+            description_en,
+            description_zh,
+            city,
+            category,
+            latitude,
+            longitude,
+            radius,
+            image,
+            created_by,
+            status,
+            reviewed_by,
+            reviewed_at
+          )
+          VALUES (
+            ?, ?, ?,
+            ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?,
+            'approved',
+            ?,
+            CURRENT_TIMESTAMP
+          )
         `,
         [
           translations.vi.name,
@@ -329,45 +398,56 @@ export async function createAdminPoi(
       result.insertId;
 
     /*
-     * Lưu bản dịch vào
-     * poi_translations.
+     * Lưu bản dịch.
      */
-    for (const language of SUPPORTED_LANGUAGES) {
-      const translation =
-        translations[language];
-
-      if (!translation) {
-        continue;
-      }
-
-      await pool.query(
-        `
-        INSERT INTO poi_translations (
-          poi_id,
-          language_code,
-          name,
-          description,
-          audio
-        )
-        VALUES (?, ?, ?, ?, ?)
-        `,
-        [
-          poiId,
-          language,
-          translation.name,
-          translation.description,
-          poi.audio?.[language] ||
-            null,
-        ]
-      );
-    }
+    await insertTranslations(
+      pool,
+      poiId,
+      translations,
+      poi.audio
+    );
 
     const createdPoi =
       await getPoiById(poiId);
 
+    /*
+     * =========================
+     * INDEX QDRANT
+     * =========================
+     *
+     * MySQL đã lưu thành công.
+     * Bây giờ đồng bộ POI sang
+     * vector database.
+     */
+    try {
+      await indexPoi(
+        buildVectorPoi({
+          id: poiId,
+          translations,
+          poi,
+        })
+      );
+
+      console.log(
+        `[Vector] POI #${poiId} indexed successfully.`
+      );
+    } catch (vectorError) {
+      /*
+       * Không rollback MySQL chỉ vì
+       * Qdrant lỗi.
+       *
+       * POI vẫn được tạo thành công.
+       */
+      console.error(
+        `[Vector] Failed to index POI #${poiId}:`,
+        vectorError
+      );
+    }
+
     return res.status(201).json({
       message:
         "Tạo POI thành công.",
+
       poi: createdPoi,
     });
   } catch (error) {
@@ -383,6 +463,10 @@ export async function createAdminPoi(
     });
   }
 }
+
+/* =========================================================
+   UPDATE POI
+========================================================= */
 
 export async function updateAdminPoi(
   req,
@@ -422,19 +506,16 @@ export async function updateAdminPoi(
     await connection.beginTransaction();
 
     /*
-     * Lấy POI hiện tại để:
-     * - kiểm tra tồn tại
-     * - giữ ảnh cũ nếu Admin
-     *   không chọn ảnh mới.
+     * Lấy POI hiện tại.
      */
     const [existingRows] =
       await connection.execute(
         `
-        SELECT
-          id,
-          image
-        FROM pois
-        WHERE id = ?
+          SELECT
+            id,
+            image
+          FROM pois
+          WHERE id = ?
         `,
         [poiId]
       );
@@ -450,11 +531,7 @@ export async function updateAdminPoi(
     }
 
     /*
-     * Nếu có ảnh mới:
-     * lưu đường dẫn ảnh mới.
-     *
-     * Nếu không:
-     * giữ ảnh hiện tại.
+     * Xử lý ảnh.
      */
     if (req.file) {
       payload.image =
@@ -480,9 +557,7 @@ export async function updateAdminPoi(
       validation.value;
 
     /*
-     * Khi Admin sửa nội dung
-     * Tiếng Việt, dịch lại toàn bộ
-     * 15 ngôn ngữ.
+     * Dịch lại toàn bộ nội dung.
      */
     const translations =
       await translatePoiContent({
@@ -496,15 +571,21 @@ export async function updateAdminPoi(
      */
     await connection.execute(
       `
-      UPDATE pois
-      SET
-        city = ?,
-        category = ?,
-        latitude = ?,
-        longitude = ?,
-        radius = ?,
-        image = ?
-      WHERE id = ?
+        UPDATE pois
+        SET
+          city = ?,
+          category = ?,
+          latitude = ?,
+          longitude = ?,
+          radius = ?,
+          image = ?,
+          name_vi = ?,
+          name_en = ?,
+          name_zh = ?,
+          description_vi = ?,
+          description_en = ?,
+          description_zh = ?
+        WHERE id = ?
       `,
       [
         poi.city,
@@ -513,12 +594,29 @@ export async function updateAdminPoi(
         poi.longitude,
         poi.radius,
         poi.image || null,
+
+        translations.vi.name,
+
+        translations.en?.name ||
+          translations.vi.name,
+
+        translations.zh?.name ||
+          translations.vi.name,
+
+        translations.vi.description,
+
+        translations.en?.description ||
+          translations.vi.description,
+
+        translations.zh?.description ||
+          translations.vi.description,
+
         poiId,
       ]
     );
 
     /*
-     * Cập nhật bản dịch.
+     * Cập nhật translations.
      */
     await updateTranslations(
       connection,
@@ -532,10 +630,40 @@ export async function updateAdminPoi(
     const savedPoi =
       await getPoiById(poiId);
 
+    /*
+     * =========================
+     * RE-INDEX QDRANT
+     * =========================
+     *
+     * Admin sửa POI
+     * → MySQL mới
+     * → embedding mới
+     * → Qdrant mới
+     */
+    try {
+      await indexPoi(
+        buildVectorPoi({
+          id: poiId,
+          translations,
+          poi,
+        })
+      );
+
+      console.log(
+        `[Vector] POI #${poiId} re-indexed successfully.`
+      );
+    } catch (vectorError) {
+      console.error(
+        `[Vector] Failed to re-index POI #${poiId}:`,
+        vectorError
+      );
+    }
+
     return res.json({
       success: true,
       message:
-        "POI đã được cập nhật và tự động dịch lại.",
+        "POI đã được cập nhật, dịch lại và đồng bộ RAG.",
+
       poi: savedPoi,
     });
   } catch (error) {
@@ -546,6 +674,10 @@ export async function updateAdminPoi(
     connection.release();
   }
 }
+
+/* =========================================================
+   DELETE POI
+========================================================= */
 
 export async function deleteAdminPoi(
   req,
@@ -583,10 +715,40 @@ export async function deleteAdminPoi(
       });
     }
 
+    /*
+     * Xóa vector tương ứng khỏi Qdrant.
+     */
+    try {
+      await deletePoiVector(poiId);
+
+      console.log(
+        `[Vector] POI #${poiId} deleted from Qdrant.`
+      );
+    } catch (vectorError) {
+      /*
+       * MySQL đã xóa thành công.
+       * Nếu Qdrant lỗi thì không rollback
+       * được transaction MySQL ở đây.
+       *
+       * Ghi log để xử lý đồng bộ lại sau.
+       */
+      console.error(
+        `[Vector] Failed to delete POI #${poiId} from Qdrant:`,
+        vectorError
+      );
+
+      return res.json({
+        success: true,
+        warning: true,
+        message:
+          "POI đã xóa khỏi MySQL nhưng vector Qdrant chưa được xóa.",
+      });
+    }
+
     return res.json({
       success: true,
       message:
-        "POI đã được xóa.",
+        "POI đã được xóa khỏi hệ thống và Qdrant.",
     });
   } catch (error) {
     return next(error);

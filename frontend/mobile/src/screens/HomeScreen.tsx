@@ -954,87 +954,79 @@ export default function HomeScreen() {
         <Text style={styles.aiChatBadgeText}>AI</Text>
       </View>
     </Pressable>
-      {/* ================= BOTTOM NAV ================= */}
+     {/* ================= BOTTOM NAV ================= */}
 
-      <View
-        style={styles.bottomBar}
-      >
+<View style={styles.bottomBar}>
+  {/* PROFILE */}
+  <Pressable
+    style={styles.bottomItem}
+    onPress={() =>
+      navigation.navigate("Profile")
+    }
+  >
+    <Text style={styles.bottomIcon}>
+      👤
+    </Text>
 
-        <Pressable
-          style={styles.bottomItem}
-          onPress={() =>
-            navigation.navigate(
-              "Profile"
-            )
-          }
-        >
+    <Text style={styles.bottomText}>
+      {common.profile}
+    </Text>
+  </Pressable>
 
-          <Text
-            style={styles.bottomIcon}
-          >
-            👤
-          </Text>
+  {/* SCAN QR */}
+  <Pressable
+    style={styles.bottomItem}
+    onPress={() =>
+      navigation.navigate("ScanQR")
+    }
+  >
+    <View style={styles.scanQrButton}>
+      <Text style={styles.scanQrIcon}>
+        ▣
+      </Text>
+    </View>
 
-          <Text
-            style={styles.bottomText}
-          >
-            {common.profile}
-          </Text>
+    <Text style={styles.bottomText}>
+      {language === "vi"
+        ? "Quét QR"
+        : "Scan QR"}
+    </Text>
+  </Pressable>
 
-        </Pressable>
+  {/* ADD POI */}
+  <Pressable
+    style={styles.bottomItem}
+    onPress={() =>
+      navigation.navigate("AddPoi")
+    }
+  >
+    <View style={styles.addButton}>
+      <Text style={styles.addIcon}>
+        ＋
+      </Text>
+    </View>
 
-        <Pressable
-          style={styles.bottomItem}
-          onPress={() =>
-            navigation.navigate(
-              "AddPoi"
-            )
-          }
-        >
+    <Text style={styles.bottomText}>
+      {common.add}
+    </Text>
+  </Pressable>
 
-          <View
-            style={styles.addButton}
-          >
-            <Text
-              style={styles.addIcon}
-            >
-              ＋
-            </Text>
-          </View>
+  {/* HISTORY / CHECK-IN */}
+  <Pressable
+    style={styles.bottomItem}
+    onPress={() =>
+      navigation.navigate("History")
+    }
+  >
+    <Text style={styles.bottomIcon}>
+      📍
+    </Text>
 
-          <Text
-            style={styles.bottomText}
-          >
-            {common.add}
-          </Text>
-
-        </Pressable>
-
-        <Pressable
-          style={styles.bottomItem}
-          onPress={() =>
-            navigation.navigate(
-              "History"
-            )
-          }
-        >
-
-          <Text
-            style={styles.bottomIcon}
-          >
-            📍
-          </Text>
-
-          <Text
-            style={styles.bottomText}
-          >
-            {common.checkin}
-          </Text>
-
-        </Pressable>
-
-      </View>
-
+    <Text style={styles.bottomText}>
+      {common.checkin}
+    </Text>
+  </Pressable>
+</View>
     </View>
   );
 }
@@ -1522,6 +1514,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  scanQrButton: {
+  width: 52,
+  height: 52,
+  borderRadius: 26,
+  backgroundColor: "#168DCC",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+scanQrIcon: {
+  color: "#FFFFFF",
+  fontSize: 27,
+  fontWeight: "900",
+},
 
   addButton: {
     width: 52,

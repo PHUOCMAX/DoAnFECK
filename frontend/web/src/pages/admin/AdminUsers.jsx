@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search,
+   Search,
   Trash2,
   Shield,
   UserRound,
@@ -9,11 +9,12 @@ import {
   Loader2,
   Users,
   X,
-     Menu,
+  Menu,
   LogOut,
   LayoutDashboard,
   Plus,
   ShieldCheck,
+  Activity,
 } from "lucide-react";
 
 import {
@@ -248,7 +249,18 @@ const normalUserCount = users.filter(
         </div>
 
         {/* Navigation */}
+        
         <nav className="flex-1 space-y-1 p-4">
+            <button
+  onClick={() => {
+    navigate("/admin?tab=monitoring");
+    setSidebarOpen(false);
+  }}
+  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+>
+  <Activity size={18} />
+  Monitoring
+</button>
           <button
             onClick={() => {
               navigate("/admin");

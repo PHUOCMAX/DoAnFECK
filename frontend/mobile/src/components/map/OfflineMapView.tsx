@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import MapView, {
-  Marker,
-  PROVIDER_DEFAULT,
   Circle,
+  Marker,
+  Polyline,
+  PROVIDER_DEFAULT,
 } from "react-native-maps";
 
 import { usePoiStore } from "../../store/usePoiStore";
@@ -42,7 +43,9 @@ export default function OfflineMapView({
   onPoiPress,
 }: OfflineMapViewProps) {
   const mapRef = useRef<MapView | null>(null);
-const pois = usePoiStore((state) => state.pois);
+
+  const pois = usePoiStore((state) => state.pois);
+
   const defaultRegion = {
     latitude: 10.7769,
     longitude: 106.7009,
@@ -50,25 +53,148 @@ const pois = usePoiStore((state) => state.pois);
     longitudeDelta: 0.1,
   };
 
-  // Khi mở map từ PoiDetail,
-  // camera sẽ focus vào POI được chọn.
-useEffect(() => {
-  if (!selectedPoi || !mapRef.current) return;
+  // =========================
+  // Tạo tuyến tham quan
+  // =========================
+  const recommendedRoute = useMemo(() => {
+    if (!location || !Array.isArray(pois) || pois.length === 0) {
+      return [];
+    }
 
-  const timer = setTimeout(() => {
-    mapRef.current?.animateToRegion(
+    const validPois = pois.filter((poi) => {
+      const latitude = Number(poi.latitude);
+      const longitude = Number(poi.longitude);
+
+      return (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude)
+      );
+    });
+
+    if (validPois.length === 0) {
+      return [];
+    }
+
+    const remaining = validPois.map((poi) => ({
+      poi,
+      distance: calculateDistance(
+        location.latitude,
+        location.longitude,
+        Number(poi.latitude),
+        Number(poi.longitude)
+      ),
+    }));
+
+    const route = [];
+
+    let current = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+    };
+
+    const routeCount = 5;
+
+    while (
+      route.length < routeCount &&
+      remaining.length > 0
+    ) {
+      let nearestIndex = -1;
+      let nearestDistance = Number.MAX_SAFE_INTEGER;
+
+      for (
+        let index = 0;
+        index < remaining.length;
+        index += 1
+      ) {
+        const candidate = remaining[index];
+
+        if (!candidate) {
+          continue;
+        }
+
+        const distance = calculateDistance(
+          current.latitude,
+          current.longitude,
+          Number(candidate.poi.latitude),
+          Number(candidate.poi.longitude)
+        );
+
+        if (
+          Number.isFinite(distance) &&
+          distance < nearestDistance
+        ) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      }
+
+      if (nearestIndex === -1) {
+        break;
+      }
+
+      const selected = remaining.splice(
+        nearestIndex,
+        1
+      )[0];
+
+      if (!selected) {
+        break;
+      }
+
+      route.push(selected.poi);
+
+      current = {
+        latitude: Number(selected.poi.latitude),
+        longitude: Number(selected.poi.longitude),
+      };
+    }
+
+    return route;
+  }, [location, pois]);
+
+  // =========================
+  // Tạo đường nối tuyến
+  // =========================
+  const routeCoordinates = useMemo(() => {
+    if (!location || recommendedRoute.length === 0) {
+      return [];
+    }
+
+    return [
       {
-        latitude: selectedPoi.latitude,
-        longitude: selectedPoi.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
+        latitude: location.latitude,
+        longitude: location.longitude,
       },
-      800
-    );
-  }, 300);
 
-  return () => clearTimeout(timer);
-}, [selectedPoi]);
+      ...recommendedRoute.map((poi) => ({
+        latitude: Number(poi.latitude),
+        longitude: Number(poi.longitude),
+      })),
+    ];
+  }, [location, recommendedRoute]);
+
+  // =========================
+  // Focus vào POI được chọn
+  // =========================
+  useEffect(() => {
+    if (!selectedPoi || !mapRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: Number(selectedPoi.latitude),
+          longitude: Number(selectedPoi.longitude),
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        },
+        800
+      );
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [selectedPoi]);
 
   return (
     <View style={styles.container}>
@@ -91,7 +217,9 @@ useEffect(() => {
         showsCompass={true}
         toolbarEnabled={true}
       >
-        {/* GPS người dùng */}
+        {/* =========================
+            GPS người dùng
+        ========================= */}
         {location && (
           <Circle
             center={{
@@ -100,31 +228,51 @@ useEffect(() => {
             }}
             radius={30}
             strokeWidth={2}
+            strokeColor="rgba(30, 136, 229, 0.65)"
             fillColor="rgba(30, 136, 229, 0.15)"
           />
         )}
-        {pois.map((poi) => (
-  <Circle
-    key={`geofence-${poi.id}`}
-    center={{
-      latitude: poi.latitude,
-      longitude: poi.longitude,
-    }}
-    radius={poi.radius}
-    strokeWidth={2}
-    fillColor="rgba(255, 152, 0, 0.12)"
-    strokeColor="rgba(255, 152, 0, 0.8)"
-  />
-))}
 
-        {/* Các POI */}
+        {/* =========================
+            ĐƯỜNG TUYẾN THAM QUAN
+        ========================= */}
+        {routeCoordinates.length >= 2 && (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeColor="#168DCC"
+            strokeWidth={5}
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
+
+        {/* =========================
+            Geofence của POI
+        ========================= */}
+        {pois.map((poi) => (
+          <Circle
+            key={`geofence-${poi.id}`}
+            center={{
+              latitude: Number(poi.latitude),
+              longitude: Number(poi.longitude),
+            }}
+            radius={Number(poi.radius)}
+            strokeWidth={2}
+            fillColor="rgba(255, 152, 0, 0.12)"
+            strokeColor="rgba(255, 152, 0, 0.8)"
+          />
+        ))}
+
+        {/* =========================
+            Các POI
+        ========================= */}
         {pois.map((poi) => {
           const distance = location
             ? calculateDistance(
                 location.latitude,
                 location.longitude,
-                poi.latitude,
-                poi.longitude
+                Number(poi.latitude),
+                Number(poi.longitude)
               )
             : null;
 
@@ -139,8 +287,8 @@ useEffect(() => {
             <Marker
               key={poi.id}
               coordinate={{
-                latitude: poi.latitude,
-                longitude: poi.longitude,
+                latitude: Number(poi.latitude),
+                longitude: Number(poi.longitude),
               }}
               title={
                 distanceText
@@ -148,7 +296,9 @@ useEffect(() => {
                   : poi.name.vi
               }
               description={poi.description.vi}
-              onPress={() => onPoiPress?.(poi.id)}
+              onPress={() =>
+                onPoiPress?.(poi.id)
+              }
             />
           );
         })}
