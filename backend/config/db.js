@@ -8,6 +8,13 @@ const pool = mysql.createPool({
   password: env.db.password,
   database: env.db.name,
 
+  ssl:
+    env.nodeEnv === "production"
+      ? {
+          rejectUnauthorized: false,
+        }
+      : undefined,
+
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
