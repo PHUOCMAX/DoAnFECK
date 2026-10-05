@@ -169,4 +169,107 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-03 19:46:30
+
+--
+-- Application tables added after the 2026-10-03 dump
+-- Session / QR authorization / Payment schema
+--
+
+DROP TABLE IF EXISTS `payments`;
+DROP TABLE IF EXISTS `session_authorizations`;
+DROP TABLE IF EXISTS `qr_codes`;
+DROP TABLE IF EXISTS `tour_sessions`;
+
+--
+-- Table structure for table `tour_sessions`
+--
+
+CREATE TABLE `tour_sessions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_token` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `price` decimal(12,2) NOT NULL DEFAULT 0,
+  `status` enum('active','expired','revoked') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `starts_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_by` int NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_tour_sessions_token` (`session_token`),
+  KEY `idx_tour_sessions_status` (`status`),
+  KEY `idx_tour_sessions_expires_at` (`expires_at`),
+  KEY `idx_tour_sessions_created_by` (`created_by`),
+  CONSTRAINT `fk_tour_sessions_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Table structure for table `qr_codes`
+--
+
+CREATE TABLE `qr_codes` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` bigint unsigned NOT NULL,
+  `qr_token` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `poi_id` bigint unsigned DEFAULT NULL,
+  `status` enum('active','disabled','expired') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_qr_codes_token` (`qr_token`),
+  KEY `idx_qr_codes_session_id` (`session_id`),
+  KEY `idx_qr_codes_poi_id` (`poi_id`),
+  KEY `idx_qr_codes_status` (`status`),
+  CONSTRAINT `fk_qr_codes_session` FOREIGN KEY (`session_id`) REFERENCES `tour_sessions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_qr_codes_poi` FOREIGN KEY (`poi_id`) REFERENCES `pois` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Table structure for table `session_authorizations`
+--
+
+CREATE TABLE `session_authorizations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` bigint unsigned NOT NULL,
+  `user_id` int NOT NULL,
+  `authorization_source` enum('qr','admin') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'qr',
+  `status` enum('active','revoked','expired') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `authorized_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_session_user` (`session_id`,`user_id`),
+  KEY `idx_session_authorizations_user_id` (`user_id`),
+  KEY `idx_session_authorizations_status` (`status`),
+  CONSTRAINT `fk_session_authorizations_session` FOREIGN KEY (`session_id`) REFERENCES `tour_sessions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_session_authorizations_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Table structure for table `payments`
+--
+
+CREATE TABLE `payments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` bigint unsigned NOT NULL,
+  `user_id` int NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `currency` char(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'VND',
+  `method` enum('online','offline') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('pending','paid','failed','cancelled','refunded') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `provider` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `transaction_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `note` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_payments_session_id` (`session_id`),
+  KEY `idx_payments_user_id` (`user_id`),
+  KEY `idx_payments_status` (`status`),
+  UNIQUE KEY `uq_payments_provider_transaction` (`provider`,`transaction_code`),
+  CONSTRAINT `fk_payments_session` FOREIGN KEY (`session_id`) REFERENCES `tour_sessions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_payments_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Updated schema: includes session, QR authorization, and payment tables.
