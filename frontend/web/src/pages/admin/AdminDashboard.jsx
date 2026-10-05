@@ -1508,7 +1508,7 @@ return [
       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
   }`}
 >
-  <CreditCard size={18} />
+  <CalendarPlus size={18} />
   Quản lý thanh toán
 </button>
           {/* Thêm POI */}
