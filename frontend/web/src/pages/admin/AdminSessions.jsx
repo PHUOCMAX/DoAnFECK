@@ -10,8 +10,9 @@ import {
 
 import { QRCodeSVG } from "qrcode.react";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5001";
+const API_URL = (
+  import.meta.env.VITE_API_URL || ""
+).replace(/\/+$/, "");
 
 const EMPTY_FORM = {
   name: "",

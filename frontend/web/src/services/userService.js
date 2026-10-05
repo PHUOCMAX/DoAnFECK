@@ -1,6 +1,5 @@
 const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5001"
+  import.meta.env.VITE_API_URL ||""
 ).replace(/\/+$/, "");
 
 async function request(path, options = {}) {

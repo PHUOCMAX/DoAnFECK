@@ -42,6 +42,9 @@ import {
   updateAdminUserRole,
   deleteAdminUser,
 } from "../../services/adminService";
+const API_URL = (
+  import.meta.env.VITE_API_URL || ""
+).replace(/\/+$/, "");
 
 const EMPTY_FORM = {
   name: {
@@ -491,7 +494,7 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
                         ? form.image
                         : `${
                             import.meta.env.VITE_API_URL ||
-                            "http://192.168.1.7:5001"
+                            `${API_URL}${form.image}`
                           }${form.image}`
                     }
 
@@ -1241,7 +1244,7 @@ return [
 
     try {
       const response = await fetch(
-        "http://localhost:5001/api/admin/monitoring",
+  `${API_URL}/api/admin/monitoring`,
 
         {
           headers: {
@@ -1347,6 +1350,7 @@ return [
         monitoring: "Bảng điều khiển giám sát",
         users: "Quản lý User",
         sessions: "Quản lý phiên tham quan",
+        payments: "Quản lý thanh toán",
         pending: "POI chờ duyệt",
 
         approved: "POI đã duyệt",

@@ -7,8 +7,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5001";
+const API_URL = (
+  import.meta.env.VITE_API_URL || ""
+).replace(/\/+$/, "");
 
 function formatPrice(value) {
   return `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
@@ -231,46 +232,8 @@ export default function AdminPayments() {
   return (
     <section className="space-y-6">
       {/* HEADER */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-            <CreditCard size={21} />
-          </div>
+    {/* HEADER */}
 
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-              Quản lý thanh toán
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Xem và xác nhận các khoản thanh toán
-              của khách.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            loadPayments({ silent: true })
-          }
-          disabled={refreshing}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw
-            size={16}
-            className={
-              refreshing
-                ? "animate-spin"
-                : ""
-            }
-          />
-
-          {refreshing
-            ? "Đang tải..."
-            : "Làm mới"}
-        </button>
-      </div>
 
       {/* ERROR */}
       {error && (

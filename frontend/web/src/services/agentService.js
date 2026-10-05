@@ -1,6 +1,5 @@
 const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  "http://192.168.1.7:5001"
+  import.meta.env.VITE_API_URL ||""
 ).replace(/\/+$/, "");
 
 export async function chatWithAgent(
