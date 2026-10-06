@@ -248,7 +248,21 @@ function MapTilerView({
 
     mapRef.current = map;
 
+    const handleMapError = (event) => {
+      console.error("[MapTiler] map error:", event?.error || event);
+    };
+
+    const handleMapLoad = () => {
+      console.info("[MapTiler] map loaded successfully");
+      map.resize();
+    };
+
+    map.on("error", handleMapError);
+    map.on("load", handleMapLoad);
+
     return () => {
+      map.off("error", handleMapError);
+      map.off("load", handleMapLoad);
       poiMarkersRef.current.forEach(
         (marker) => marker.remove()
       );
@@ -606,7 +620,8 @@ function MapTilerView({
 
           <p className="mt-2 text-sm text-slate-500">
             Kiểm tra VITE_MAPTILER_KEY trong
-            file .env
+            Vercel → Settings → Environment Variables.
+            Sau khi thay đổi biến, phải redeploy frontend.
           </p>
         </div>
       </div>
