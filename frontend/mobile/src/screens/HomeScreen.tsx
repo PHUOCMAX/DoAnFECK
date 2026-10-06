@@ -11,6 +11,8 @@ import {
 import { useMemo, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 
+import type { UserLocation } from "../hooks/useNativeLocation";
+
 import { useAppStore } from "../store/useAppStore";
 import { getTranslations } from "../translations";
 import { usePoiStore } from "../store/usePoiStore";
@@ -92,10 +94,18 @@ export default function HomeScreen() {
     error: locationError,
   } = useNativeLocation(true);
 
+  /* ================= DEMO LOCATION ================= */
+
+  const [demoLocation, setDemoLocation] =
+    useState<UserLocation | null>(null);
+
+  const effectiveLocation =
+    demoLocation ?? location;
+
   /* ================= GEOFENCE ================= */
 
   useGeofenceEngine({
-    location,
+    location: effectiveLocation,
 
     onCheckin: (poiId) => {
       console.log(
@@ -178,14 +188,14 @@ export default function HomeScreen() {
         );
       }
 
-      if (!location) {
+      if (!effectiveLocation) {
         return false;
       }
 
       const distance =
         calculateDistance(
-          location.latitude,
-          location.longitude,
+          effectiveLocation.latitude,
+          effectiveLocation.longitude,
           poi.latitude,
           poi.longitude
         );
@@ -203,7 +213,7 @@ export default function HomeScreen() {
     city,
     nearby,
     language,
-    location,
+    effectiveLocation,
     pois,
   ]);
 
@@ -619,25 +629,16 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {permissionGranted &&
-        location && (
-          <View
-            style={styles.locationStatus}
-          >
-            <Text
-              style={styles.locationStatusText}
-            >
-              📍 {common.gpsLocation}:{" "}
-              {location.latitude.toFixed(
-                5
-              )}
-              ,{" "}
-              {location.longitude.toFixed(
-                5
-              )}
-            </Text>
-          </View>
-        )}
+      {effectiveLocation && (
+        <View style={styles.locationStatus}>
+          <Text style={styles.locationStatusText}>
+            📍 {demoLocation ? "Demo GPS" : common.gpsLocation}:{" "}
+            {effectiveLocation.latitude.toFixed(5)}
+            ,{" "}
+            {effectiveLocation.longitude.toFixed(5)}
+          </Text>
+        </View>
+      )}
 
       {locationError && (
         <View
@@ -651,7 +652,78 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* ================= POI CONTENT ================= */}
+      {/* ================= DEMO LOCATION ================= */}
+
+      <View style={styles.demoLocationBox}>
+        <View style={styles.demoLocationHeader}>
+          <View style={styles.demoLocationTitleWrap}>
+            <Text style={styles.demoLocationTitle}>
+              Demo GPS
+            </Text>
+            <Text style={styles.demoLocationSubtitle}>
+              Mô phỏng vị trí để thầy chấm không cần ở Linh Ứng
+            </Text>
+          </View>
+
+          {demoLocation && (
+            <Pressable
+              style={styles.demoClearButton}
+              onPress={() => setDemoLocation(null)}
+            >
+              <Text style={styles.demoClearButtonText}>
+                GPS thật
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.demoLocationList}
+        >
+          {pois.slice(0, 5).map((poi) => {
+            const poiName =
+              poi.name[language] ??
+              poi.name.vi ??
+              Object.values(poi.name)[0] ??
+              `POI #${poi.id}`;
+
+            return (
+              <Pressable
+                key={poi.id}
+                style={[
+                  styles.demoPoiButton,
+                  demoLocation?.latitude === poi.latitude &&
+                    demoLocation?.longitude === poi.longitude &&
+                    styles.demoPoiButtonActive,
+                ]}
+                onPress={() =>
+                  setDemoLocation({
+                    latitude: poi.latitude,
+                    longitude: poi.longitude,
+                    accuracy: 1,
+                  })
+                }
+              >
+                <Text
+                  style={[
+                    styles.demoPoiButtonText,
+                    demoLocation?.latitude === poi.latitude &&
+                      demoLocation?.longitude === poi.longitude &&
+                      styles.demoPoiButtonTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {poiName}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+            {/* ================= POI CONTENT ================= */}
 
       <ScrollView
         style={styles.poiScroll}
@@ -668,7 +740,7 @@ export default function HomeScreen() {
             style={styles.mapContainer}
           >
             <OfflineMapView
-              location={location}
+              location={effectiveLocation}
               onPoiPress={(poiId) => {
                 navigation.navigate(
                   "PoiDetail",
@@ -725,10 +797,10 @@ export default function HomeScreen() {
             {filteredPois.map((poi) => {
 
               const distance =
-                location
+                effectiveLocation
                   ? calculateDistance(
-                      location.latitude,
-                      location.longitude,
+                      effectiveLocation.latitude,
+                      effectiveLocation.longitude,
                       poi.latitude,
                       poi.longitude
                     )
@@ -1212,6 +1284,88 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
     color: "#222",
+  },
+
+  /* ================= DEMO GPS ================= */
+
+  demoLocationBox: {
+    marginHorizontal: 12,
+    marginTop: 4,
+    padding: 12,
+    backgroundColor: "#fff8e8",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#f0d28a",
+  },
+
+  demoLocationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  demoLocationTitleWrap: {
+    flex: 1,
+    marginRight: 10,
+  },
+
+  demoLocationTitle: {
+    color: "#8a5a00",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  demoLocationSubtitle: {
+    marginTop: 3,
+    color: "#9a7a3a",
+    fontSize: 10,
+    lineHeight: 15,
+  },
+
+  demoClearButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d9c080",
+  },
+
+  demoClearButtonText: {
+    color: "#7a5a10",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  demoLocationList: {
+    paddingTop: 10,
+    paddingRight: 8,
+    gap: 8,
+  },
+
+  demoPoiButton: {
+    maxWidth: 150,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5d6ab",
+  },
+
+  demoPoiButtonActive: {
+    backgroundColor: "#168dcc",
+    borderColor: "#168dcc",
+  },
+
+  demoPoiButtonText: {
+    color: "#6b5318",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  demoPoiButtonTextActive: {
+    color: "#fff",
   },
 
   /* ================= GPS ================= */
