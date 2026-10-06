@@ -63,6 +63,8 @@ const Stack =
 /* =========================================================
    SCAN QR SCREEN
 ========================================================= */
+type PaymentMethod = "online" | "offline";
+
 function ScanQRScreen() {
   const navigation = useNavigation<any>();
 
@@ -91,6 +93,9 @@ function ScanQRScreen() {
 
   const [payment, setPayment] =
     useState<any>(null);
+
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>("online");
 
   const [paymentLoading, setPaymentLoading] =
     useState(false);
@@ -126,6 +131,7 @@ function ScanQRScreen() {
     setPaymentRequired(false);
     setPaymentSession(null);
     setPayment(null);
+    setPaymentMethod("online");
     setPaymentLoading(false);
     setPaymentError("");
     setPendingQrToken("");
@@ -193,7 +199,19 @@ function ScanQRScreen() {
             : null
         );
 
-        setPayment(data?.payment || null);
+        const existingPayment = data?.payment || null;
+
+        setPayment(existingPayment);
+
+        if (
+          existingPayment?.method === "online" ||
+          existingPayment?.method === "offline"
+        ) {
+          setPaymentMethod(existingPayment.method);
+        } else {
+          setPaymentMethod("online");
+        }
+
         setPendingQrToken(qrToken);
         setPaymentError("");
         setProcessing(false);
@@ -292,9 +310,11 @@ function ScanQRScreen() {
           body: JSON.stringify({
             sessionId:
               paymentSession.id,
-            method: "online",
+            method: paymentMethod,
             note:
-              "Thanh toán vào tour",
+              paymentMethod === "online"
+                ? "Thanh toán online để vào tour"
+                : "Thanh toán tiền mặt tại quầy để vào tour",
           }),
         }
       );
@@ -389,6 +409,13 @@ function ScanQRScreen() {
         setPayment(
           currentPayment
         );
+
+        if (
+          currentPayment?.method === "online" ||
+          currentPayment?.method === "offline"
+        ) {
+          setPaymentMethod(currentPayment.method);
+        }
 
         // =========================
         // ĐÃ THANH TOÁN
@@ -682,6 +709,69 @@ function ScanQRScreen() {
             </Text>
           </View>
 
+          {/* =========================
+              PAYMENT METHOD
+          ========================= */}
+          <View style={styles.paymentMethodSection}>
+            <Text style={styles.paymentMethodTitle}>
+              Chọn phương thức thanh toán
+            </Text>
+
+            <Pressable
+              style={[
+                styles.paymentMethodCard,
+                paymentMethod === "online" &&
+                  styles.paymentMethodCardActive,
+              ]}
+              onPress={() => setPaymentMethod("online")}
+              disabled={isPending || isPaid || paymentLoading}
+            >
+              <View style={styles.paymentMethodTextWrap}>
+                <Text style={styles.paymentMethodName}>
+                  Thanh toán online
+                </Text>
+                <Text style={styles.paymentMethodDescription}>
+                  Payoo / cổng thanh toán trực tuyến
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.paymentRadio,
+                  paymentMethod === "online" &&
+                    styles.paymentRadioActive,
+                ]}
+              />
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.paymentMethodCard,
+                paymentMethod === "offline" &&
+                  styles.paymentMethodCardActive,
+              ]}
+              onPress={() => setPaymentMethod("offline")}
+              disabled={isPending || isPaid || paymentLoading}
+            >
+              <View style={styles.paymentMethodTextWrap}>
+                <Text style={styles.paymentMethodName}>
+                  Thanh toán tại quầy
+                </Text>
+                <Text style={styles.paymentMethodDescription}>
+                  Tiền mặt / Admin xác nhận thanh toán
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.paymentRadio,
+                  paymentMethod === "offline" &&
+                    styles.paymentRadioActive,
+                ]}
+              />
+            </Pressable>
+          </View>
+
           {payment?.transaction_code && (
             <View
               style={
@@ -743,7 +833,9 @@ function ScanQRScreen() {
               >
                 {paymentLoading
                   ? "Đang tạo yêu cầu..."
-                  : "Thanh toán"}
+                  : paymentMethod === "online"
+                    ? "Thanh toán online"
+                    : "Đăng ký thanh toán tiền mặt"}
               </Text>
             </Pressable>
           )}
@@ -763,11 +855,9 @@ function ScanQRScreen() {
               styles.paymentDemoText
             }
           >
-            Thanh toán online hiện
-            đang chạy ở chế độ demo.
-            Sau khi Admin xác nhận
-            "paid", ứng dụng sẽ tự
-            động vào tour.
+            {paymentMethod === "online"
+              ? "Thanh toán online hiện đang ở chế độ demo, chưa kết nối cổng Payoo thật. Sau khi payment được xác nhận là paid, ứng dụng sẽ tự động cấp quyền vào tour."
+              : "Thanh toán tiền mặt được ghi nhận là pending. Sau khi Admin xác nhận đã thu tiền, ứng dụng sẽ tự động cấp quyền vào tour."}
           </Text>
 
           <Pressable
@@ -1375,6 +1465,67 @@ paymentInfoValue: {
   color: "#222222",
   fontSize: 12,
   fontWeight: "800",
+},
+
+paymentMethodSection: {
+  marginTop: 20,
+},
+
+paymentMethodTitle: {
+  fontSize: 14,
+  fontWeight: "900",
+  color: "#171717",
+  marginBottom: 10,
+},
+
+paymentMethodCard: {
+  minHeight: 72,
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingHorizontal: 16,
+  paddingVertical: 14,
+  marginBottom: 10,
+  borderWidth: 1,
+  borderColor: "#E1E5EA",
+  borderRadius: 16,
+  backgroundColor: "#FFFFFF",
+},
+
+paymentMethodCardActive: {
+  borderColor: "#168DCC",
+  backgroundColor: "#F0F7FF",
+},
+
+paymentMethodTextWrap: {
+  flex: 1,
+  paddingRight: 12,
+},
+
+paymentMethodName: {
+  color: "#171717",
+  fontSize: 14,
+  fontWeight: "900",
+},
+
+paymentMethodDescription: {
+  marginTop: 4,
+  color: "#777777",
+  fontSize: 12,
+  lineHeight: 17,
+},
+
+paymentRadio: {
+  width: 20,
+  height: 20,
+  borderRadius: 10,
+  borderWidth: 2,
+  borderColor: "#B8BEC7",
+},
+
+paymentRadioActive: {
+  borderWidth: 6,
+  borderColor: "#168DCC",
 },
 
 paymentButton: {
