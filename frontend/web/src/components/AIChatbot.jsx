@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { chatWithAgent } from "../services/agentService";
+import { getUserToken } from "../services/userService";
 
 export default function AIChatbot({
   language = "vi",
@@ -53,8 +54,7 @@ export default function AIChatbot({
       return;
     }
 
-    const token =
-      localStorage.getItem("token");
+    const token = getUserToken();
 
     if (!token) {
       setMessages((prev) => [
