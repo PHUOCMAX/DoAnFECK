@@ -41,14 +41,29 @@ export default function LoginScreen() {
         password,
       });
 
-      await login(data.user, data.token);
+      await login(
+        data.user,
+        data.token
+      );
 
-      navigation.replace("Home");
+      /*
+       * Đăng nhập xong chỉ vào Home.
+       *
+       * Chưa được authorize tour.
+       * Người dùng phải bấm "Vào tour"
+       * rồi mới quét QR.
+       */
+      navigation.replace("Home", {});
     } catch (error) {
-      console.error("LOGIN ERROR:", error);
+      console.error(
+        "LOGIN ERROR:",
+        error
+      );
 
       Alert.alert(
-        error instanceof ApiError && error.status && error.status < 500
+        error instanceof ApiError &&
+          error.status &&
+          error.status < 500
           ? "Đăng nhập thất bại"
           : "Không thể kết nối",
         error instanceof ApiError

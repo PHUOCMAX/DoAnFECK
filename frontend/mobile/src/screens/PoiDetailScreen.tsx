@@ -1,4 +1,7 @@
 import { useEffect } from "react";
+
+import { useAudioPlayer } from "expo-audio";
+
 import {
   View,
   Text,
@@ -17,7 +20,11 @@ import {
 import { useAppStore } from "../store/useAppStore";
 import { getTranslations } from "../translations";
 import { usePoiStore } from "../store/usePoiStore";
-import { speakText, stopSpeaking } from "../services/nativeTts";
+
+import {
+  speakText,
+  stopSpeaking,
+} from "../services/nativeTts";
 
 type RouteParams = {
   poiId: number;
@@ -31,14 +38,50 @@ type PoiDetailNavigationParamList = {
 };
 
 const API_URL =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") || "";
+  process.env.EXPO_PUBLIC_API_URL?.replace(
+    /\/+$/,
+    ""
+  ) || "";
 
-function resolveImageUrl(image?: string | null) {
-  if (!image) return null;
+function resolveImageUrl(
+  image?: string | null
+) {
+  if (!image) {
+    return null;
+  }
 
   const value = image.trim();
 
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
+
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://")
+  ) {
+    return value;
+  }
+
+  if (value.startsWith("/")) {
+    return `${API_URL}${value}`;
+  }
+
+  return `${API_URL}/${value}`;
+}
+
+function resolveAudioUrl(
+  audio?: string | null
+) {
+  if (!audio) {
+    return null;
+  }
+
+  const value = audio.trim();
+
+  if (!value) {
+    return null;
+  }
 
   if (
     value.startsWith("http://") ||
@@ -56,84 +99,263 @@ function resolveImageUrl(image?: string | null) {
 
 export default function PoiDetailScreen() {
   const route = useRoute();
-  const navigation =
-    useNavigation<NavigationProp<PoiDetailNavigationParamList>>();
 
-  const { poiId, autoPlay } = route.params as RouteParams;
+  const navigation =
+    useNavigation<
+      NavigationProp<PoiDetailNavigationParamList>
+    >();
+
+  const {
+    poiId,
+    autoPlay,
+  } = route.params as RouteParams;
+
+  /* ================= APP STORE ================= */
 
   const language = useAppStore(
     (state) => state.language
   );
 
+  /* ================= POI ================= */
+
   const getPoiById = usePoiStore(
     (state) => state.getPoiById
   );
 
+  const poi = getPoiById(poiId);
+
+  /* ================= TRANSLATION ================= */
+
   const texts = getTranslations(language);
   const common = texts.common;
 
-  const poi = getPoiById(poiId);
+  /* ================= AUDIO ================= */
+
+  const audioUrl = resolveAudioUrl(
+    poi?.audio?.[language]
+  );
+
+  const player = useAudioPlayer(
+    audioUrl,
+    {
+      downloadFirst: true,
+    }
+  );
+
+  /* ================= AUTO PLAY ================= */
 
   useEffect(() => {
-    if (!autoPlay || !poi) return;
+    if (!autoPlay || !poi) {
+      return;
+    }
 
     const description =
       poi.description[language] ??
       poi.description.vi ??
-      Object.values(poi.description)[0] ??
+      Object.values(
+        poi.description
+      )[0] ??
       "";
 
-    if (!description) return;
+    /*
+     * Ưu tiên audio MP3 đã được
+     * generate từ backend.
+     */
+    if (audioUrl) {
+      console.log(
+        "POI AUDIO PLAY:",
+        poi.id,
+        language,
+        audioUrl
+      );
 
-    const timer = setTimeout(() => {
-      speakText(description, language);
-    }, 500);
+      stopSpeaking();
+
+      try {
+        player.play();
+      } catch (error) {
+        console.error(
+          "POI AUDIO PLAY ERROR:",
+          error
+        );
+
+        if (description) {
+          console.log(
+            "POI AUDIO FALLBACK TTS:",
+            poi.id,
+            language
+          );
+
+          speakText(
+            description,
+            language
+          );
+        }
+      }
+
+      return () => {
+        try {
+          player.pause();
+        } catch {
+          // ignore
+        }
+
+        stopSpeaking();
+      };
+    }
+
+    /*
+     * Không có audio MP3
+     * → fallback native TTS.
+     */
+    if (!description) {
+      return;
+    }
+
+    console.log(
+      "POI AUDIO FALLBACK TTS:",
+      poi.id,
+      language
+    );
+
+    speakText(
+      description,
+      language
+    );
 
     return () => {
-      clearTimeout(timer);
       stopSpeaking();
     };
-  }, [autoPlay, poi, language]);
+  }, [
+    autoPlay,
+    poi,
+    language,
+    audioUrl,
+    player,
+  ]);
+
+  /* ================= PLAY ================= */
 
   const handlePlayAudio = () => {
-    if (!poi) return;
+    if (!poi) {
+      return;
+    }
+
+    if (audioUrl) {
+      console.log(
+        "MANUAL POI AUDIO PLAY:",
+        poi.id,
+        language,
+        audioUrl
+      );
+
+      stopSpeaking();
+
+      try {
+        player.play();
+      } catch (error) {
+        console.error(
+          "MANUAL POI AUDIO ERROR:",
+          error
+        );
+
+        const description =
+          poi.description[language] ??
+          poi.description.vi ??
+          Object.values(
+            poi.description
+          )[0] ??
+          "";
+
+        if (description) {
+          console.log(
+            "MANUAL POI AUDIO FALLBACK TTS:",
+            poi.id,
+            language
+          );
+
+          speakText(
+            description,
+            language
+          );
+        }
+      }
+
+      return;
+    }
 
     const description =
       poi.description[language] ??
       poi.description.vi ??
-      Object.values(poi.description)[0] ??
+      Object.values(
+        poi.description
+      )[0] ??
       "";
 
-    if (!description) return;
+    if (!description) {
+      return;
+    }
 
-    speakText(description, language);
+    console.log(
+      "MANUAL POI AUDIO FALLBACK TTS:",
+      poi.id,
+      language
+    );
+
+    speakText(
+      description,
+      language
+    );
   };
+
+  /* ================= STOP ================= */
 
   const handleStopAudio = () => {
+    try {
+      player.pause();
+    } catch {
+      // ignore
+    }
+
     stopSpeaking();
   };
+
+  /* ================= NOT FOUND ================= */
 
   if (!poi) {
     return (
       <View style={styles.notFound}>
-        <Text style={styles.notFoundIcon}>📍</Text>
-        <Text style={styles.notFoundText}>
+        <Text
+          style={styles.notFoundIcon}
+        >
+          📍
+        </Text>
+
+        <Text
+          style={styles.notFoundText}
+        >
           POI not found
         </Text>
       </View>
     );
   }
 
+  /* ================= LOCALIZED CONTENT ================= */
+
   const poiName =
     poi.name[language] ??
     poi.name.vi ??
-    Object.values(poi.name)[0] ??
+    Object.values(
+      poi.name
+    )[0] ??
     "";
 
   const poiDescription =
     poi.description[language] ??
     poi.description.vi ??
-    Object.values(poi.description)[0] ??
+    Object.values(
+      poi.description
+    )[0] ??
     "";
 
   const category =
@@ -141,161 +363,312 @@ export default function PoiDetailScreen() {
       ? common.food
       : common.tourism;
 
-  const imageUrl = resolveImageUrl(poi.image);
+  const imageUrl =
+    resolveImageUrl(
+      poi.image
+    );
 
   return (
     <View style={styles.screen}>
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={
+          false
+        }
+        contentContainerStyle={
+          styles.content
+        }
       >
-        {/* IMAGE */}
+        {/* ================= IMAGE ================= */}
+
         <View style={styles.hero}>
           {imageUrl ? (
             <Image
-              source={{ uri: imageUrl }}
+              source={{
+                uri: imageUrl,
+              }}
               style={styles.image}
               resizeMode="cover"
-              onLoad={() => {
-                console.log(
-                  "POI IMAGE LOAD SUCCESS:",
-                  imageUrl
-                );
-              }}
-              onError={(event) => {
-                console.log(
-                  "POI IMAGE LOAD ERROR:",
-                  imageUrl
-                );
-                console.log(
-                  "POI IMAGE ERROR DETAIL:",
-                  event.nativeEvent
-                );
-              }}
             />
           ) : (
-            <View style={styles.imageFallback}>
-              <Text style={styles.imageFallbackIcon}>
+            <View
+              style={
+                styles.imageFallback
+              }
+            >
+              <Text
+                style={
+                  styles.imageFallbackIcon
+                }
+              >
                 🏞️
               </Text>
             </View>
           )}
 
-          <View style={styles.imageOverlay} />
+          <View
+            style={
+              styles.imageOverlay
+            }
+          />
 
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryBadgeText}>
+          <View
+            style={
+              styles.categoryBadge
+            }
+          >
+            <Text
+              style={
+                styles.categoryBadgeText
+              }
+            >
               {category}
             </Text>
           </View>
         </View>
 
-        {/* MAIN CONTENT */}
-        <View style={styles.container}>
+        {/* ================= MAIN CONTENT ================= */}
+
+        <View
+          style={styles.container}
+        >
           {/* TITLE */}
-          <Text style={styles.title}>{poiName}</Text>
+
+          <Text
+            style={styles.title}
+          >
+            {poiName}
+          </Text>
 
           {/* LOCATION */}
-          <View style={styles.locationRow}>
-            <Text style={styles.locationIcon}>📍</Text>
 
-            <Text style={styles.locationText}>
-              {poi.city === "ho-chi-minh"
+          <View
+            style={
+              styles.locationRow
+            }
+          >
+            <Text
+              style={
+                styles.locationIcon
+              }
+            >
+              📍
+            </Text>
+
+            <Text
+              style={
+                styles.locationText
+              }
+            >
+              {poi.city ===
+              "ho-chi-minh"
                 ? common.hoChiMinh
                 : poi.city}
             </Text>
           </View>
 
           {/* DESCRIPTION */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {common.detailDescription}
+
+          <View
+            style={styles.section}
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
+              {
+                common.detailDescription
+              }
             </Text>
 
-            <View style={styles.descriptionCard}>
-              <Text style={styles.description}>
+            <View
+              style={
+                styles.descriptionCard
+              }
+            >
+              <Text
+                style={
+                  styles.description
+                }
+              >
                 {poiDescription}
               </Text>
             </View>
           </View>
 
-          {/* AUDIO */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
+          {/* ================= AUDIO ================= */}
+
+          <View
+            style={styles.section}
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
               {common.playAudio}
             </Text>
 
-            <View style={styles.audioCard}>
-              <View style={styles.audioIconBox}>
-                <Text style={styles.audioIcon}>🔊</Text>
+            <View
+              style={styles.audioCard}
+            >
+              <View
+                style={
+                  styles.audioIconBox
+                }
+              >
+                <Text
+                  style={
+                    styles.audioIcon
+                  }
+                >
+                  🔊
+                </Text>
               </View>
 
-              <View style={styles.audioInfo}>
-                <Text style={styles.audioTitle}>
+              <View
+                style={styles.audioInfo}
+              >
+                <Text
+                  style={
+                    styles.audioTitle
+                  }
+                >
                   {common.playAudio}
                 </Text>
 
-                <Text style={styles.audioDescription}>
-                  {poiDescription.length > 80
-                    ? `${poiDescription.substring(0, 80)}...`
+                <Text
+                  style={
+                    styles.audioDescription
+                  }
+                >
+                  {poiDescription.length >
+                  80
+                    ? `${poiDescription.substring(
+                        0,
+                        80
+                      )}...`
                     : poiDescription}
                 </Text>
               </View>
             </View>
 
+            {/* PLAY */}
+
             <Pressable
-              style={({ pressed }) => [
+              style={({
+                pressed,
+              }) => [
                 styles.audioButton,
-                pressed && styles.buttonPressed,
+                pressed &&
+                  styles.buttonPressed,
               ]}
-              onPress={handlePlayAudio}
+              onPress={
+                handlePlayAudio
+              }
             >
-              <Text style={styles.audioButtonIcon}>
+              <Text
+                style={
+                  styles.audioButtonIcon
+                }
+              >
                 ▶
               </Text>
 
-              <Text style={styles.audioButtonText}>
+              <Text
+                style={
+                  styles.audioButtonText
+                }
+              >
                 {common.playAudio}
               </Text>
             </Pressable>
 
+            {/* STOP */}
+
             <Pressable
-              style={({ pressed }) => [
+              style={({
+                pressed,
+              }) => [
                 styles.stopAudioButton,
-                pressed && styles.buttonPressed,
+                pressed &&
+                  styles.buttonPressed,
               ]}
-              onPress={handleStopAudio}
+              onPress={
+                handleStopAudio
+              }
             >
-              <Text style={styles.stopAudioButtonText}>
+              <Text
+                style={
+                  styles.stopAudioButtonText
+                }
+              >
                 {common.stopAudio}
               </Text>
             </Pressable>
           </View>
 
-          {/* GPS */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
+          {/* ================= GPS ================= */}
+
+          <View
+            style={styles.section}
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
               {common.coordinates}
             </Text>
 
-            <View style={styles.infoCard}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>
+            <View
+              style={styles.infoCard}
+            >
+              <View
+                style={
+                  styles.infoRow
+                }
+              >
+                <Text
+                  style={
+                    styles.infoLabel
+                  }
+                >
                   {common.latitude}
                 </Text>
 
-                <Text style={styles.infoValue}>
-                  {Number(poi.latitude).toFixed(6)}
+                <Text
+                  style={
+                    styles.infoValue
+                  }
+                >
+                  {Number(
+                    poi.latitude
+                  ).toFixed(6)}
                 </Text>
               </View>
 
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>
+              <View
+                style={
+                  styles.infoRow
+                }
+              >
+                <Text
+                  style={
+                    styles.infoLabel
+                  }
+                >
                   {common.longitude}
                 </Text>
 
-                <Text style={styles.infoValue}>
-                  {Number(poi.longitude).toFixed(6)}
+                <Text
+                  style={
+                    styles.infoValue
+                  }
+                >
+                  {Number(
+                    poi.longitude
+                  ).toFixed(6)}
                 </Text>
               </View>
 
@@ -305,53 +678,104 @@ export default function PoiDetailScreen() {
                   styles.lastInfoRow,
                 ]}
               >
-                <Text style={styles.infoLabel}>
+                <Text
+                  style={
+                    styles.infoLabel
+                  }
+                >
                   {common.radius}
                 </Text>
 
-                <Text style={styles.infoValue}>
-                  {poi.radius} {common.meters}
+                <Text
+                  style={
+                    styles.infoValue
+                  }
+                >
+                  {poi.radius}{" "}
+                  {common.meters}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* CHECK-IN */}
-          <View style={styles.checkinCard}>
-            <View style={styles.checkinIconBox}>
-              <Text style={styles.checkinIcon}>
+          {/* ================= CHECK-IN ================= */}
+
+          <View
+            style={
+              styles.checkinCard
+            }
+          >
+            <View
+              style={
+                styles.checkinIconBox
+              }
+            >
+              <Text
+                style={
+                  styles.checkinIcon
+                }
+              >
                 ✓
               </Text>
             </View>
 
-            <View style={styles.checkinContent}>
-              <Text style={styles.checkinTitle}>
+            <View
+              style={
+                styles.checkinContent
+              }
+            >
+              <Text
+                style={
+                  styles.checkinTitle
+                }
+              >
                 {common.checkin}
               </Text>
 
-              <Text style={styles.checkinDescription}>
-                {common.checkinAvailable}
+              <Text
+                style={
+                  styles.checkinDescription
+                }
+              >
+                {
+                  common.checkinAvailable
+                }
               </Text>
             </View>
           </View>
 
-          {/* MAP */}
+          {/* ================= MAP ================= */}
+
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.mapButton,
-              pressed && styles.buttonPressed,
+              pressed &&
+                styles.buttonPressed,
             ]}
             onPress={() =>
-              navigation.navigate("Map", {
-                poiId: poi.id,
-              })
+              navigation.navigate(
+                "Map",
+                {
+                  poiId: poi.id,
+                }
+              )
             }
           >
-            <Text style={styles.mapButtonIcon}>
+            <Text
+              style={
+                styles.mapButtonIcon
+              }
+            >
               🗺️
             </Text>
 
-            <Text style={styles.mapButtonText}>
+            <Text
+              style={
+                styles.mapButtonText
+              }
+            >
               {common.map}
             </Text>
           </Pressable>
@@ -371,7 +795,8 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
 
-  /* HERO */
+  /* ================= HERO ================= */
+
   hero: {
     width: "100%",
     height: 270,
@@ -402,7 +827,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: 100,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor:
+      "rgba(0,0,0,0.25)",
   },
 
   categoryBadge: {
@@ -412,7 +838,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.65)",
+    backgroundColor:
+      "rgba(0,0,0,0.65)",
   },
 
   categoryBadgeText: {
@@ -421,7 +848,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  /* MAIN */
+  /* ================= MAIN ================= */
+
   container: {
     paddingHorizontal: 16,
     paddingTop: 18,
@@ -451,7 +879,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* SECTION */
+  /* ================= SECTION ================= */
+
   section: {
     marginTop: 22,
   },
@@ -463,7 +892,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  /* DESCRIPTION */
+  /* ================= DESCRIPTION ================= */
+
   descriptionCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
@@ -478,7 +908,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
 
-  /* AUDIO */
+  /* ================= AUDIO ================= */
+
   audioCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
@@ -557,7 +988,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  /* GPS */
+  /* ================= GPS ================= */
+
   infoCard: {
     backgroundColor: "#ffffff",
     borderRadius: 16,
@@ -593,7 +1025,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  /* CHECK-IN */
+  /* ================= CHECK-IN ================= */
+
   checkinCard: {
     marginTop: 22,
     backgroundColor: "#e7f8f3",
@@ -638,7 +1071,8 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  /* MAP */
+  /* ================= MAP ================= */
+
   mapButton: {
     marginTop: 14,
     height: 56,
@@ -664,10 +1098,15 @@ const styles = StyleSheet.create({
 
   buttonPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.98 }],
+    transform: [
+      {
+        scale: 0.98,
+      },
+    ],
   },
 
-  /* NOT FOUND */
+  /* ================= NOT FOUND ================= */
+
   notFound: {
     flex: 1,
     alignItems: "center",

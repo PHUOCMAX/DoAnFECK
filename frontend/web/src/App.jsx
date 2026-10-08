@@ -19,22 +19,45 @@ import UserMap from "./pages/user/UserMap";
 import UserChat from "./pages/user/UserChat";
 import UserProfile from "./pages/user/UserProfile";
 import AddPoi from "./pages/user/AddPoi";
+import UserScanQR from "./pages/user/UserScanQR";
+import UserPayment from "./pages/user/UserPayment";
 
 import WebGeofenceEngine from "./components/user/WebGeofenceEngine";
 
-import { getUserToken } from "./services/userService";
+import {
+  getTourAuthorization,
+  getUserToken,
+} from "./services/userService";
+
 import { PoiProvider } from "./stores/PoiProvider";
+
+/* =====================================================
+   REQUIRE USER
+===================================================== */
 
 function RequireUser({ children }) {
   const location = useLocation();
 
-  if (!getUserToken()) {
+  const token = getUserToken();
+
+  if (!token) {
+    /*
+     * Giữ cả pathname + query string.
+     *
+     * Ví dụ:
+     * /scan-qr?qrToken=ABC123
+     *
+     * Sau khi login xong UserLogin sẽ quay lại
+     * đúng URL này.
+     */
+    const from = `${location.pathname}${location.search}`;
+
     return (
       <Navigate
         to="/login"
         replace
         state={{
-          from: location.pathname,
+          from,
         }}
       />
     );
@@ -43,22 +66,48 @@ function RequireUser({ children }) {
   return children;
 }
 
+/* =====================================================
+   REQUIRE TOUR
+===================================================== */
+
+function RequireTour({ children }) {
+  const location = useLocation();
+
+  const authorization =
+    getTourAuthorization();
+
+  if (
+    authorization?.status !== "active" ||
+    !authorization?.sessionId
+  ) {
+    return (
+      <Navigate
+        to="/scan-qr"
+        replace
+        state={{
+          from: `${location.pathname}${location.search}`,
+        }}
+      />
+    );
+  }
+
+  return children;
+}
+
+/* =====================================================
+   APP
+===================================================== */
+
 function App() {
   return (
     <BrowserRouter>
       <PoiProvider>
-
-        {/* 
-         * Geofence chạy toàn bộ USER APP.
-         * Không đặt bên trong từng Route.
-         */}
         <WebGeofenceEngine />
 
         <Routes>
-
-          {/* ========================= */}
-          {/* USER AUTH                  */}
-          {/* ========================= */}
+          {/* =================================================
+             USER AUTH
+          ================================================= */}
 
           <Route
             path="/login"
@@ -70,9 +119,31 @@ function App() {
             element={<UserRegister />}
           />
 
-          {/* ========================= */}
-          {/* ADMIN                      */}
-          {/* ========================= */}
+          {/* =================================================
+             TOUR ACCESS
+          ================================================= */}
+
+          <Route
+            path="/scan-qr"
+            element={
+              <RequireUser>
+                <UserScanQR />
+              </RequireUser>
+            }
+          />
+
+          <Route
+            path="/payment"
+            element={
+              <RequireUser>
+                <UserPayment />
+              </RequireUser>
+            }
+          />
+
+          {/* =================================================
+             ADMIN
+          ================================================= */}
 
           <Route
             path="/admin/login"
@@ -89,9 +160,9 @@ function App() {
             element={<AdminUsers />}
           />
 
-          {/* ========================= */}
-          {/* HOME                       */}
-          {/* ========================= */}
+          {/* =================================================
+             HOME
+          ================================================= */}
 
           <Route
             path="/"
@@ -102,61 +173,69 @@ function App() {
             }
           />
 
-          {/* ========================= */}
-          {/* EXPLORE                    */}
-          {/* ========================= */}
+          {/* =================================================
+             EXPLORE
+          ================================================= */}
 
           <Route
             path="/explore"
             element={
               <RequireUser>
-                <UserExplore />
+                <RequireTour>
+                  <UserExplore />
+                </RequireTour>
               </RequireUser>
             }
           />
 
-          {/* ========================= */}
-          {/* POI DETAIL                 */}
-          {/* ========================= */}
+          {/* =================================================
+             POI DETAIL
+          ================================================= */}
 
           <Route
             path="/pois/:id"
             element={
               <RequireUser>
-                <PoiDetail />
+                <RequireTour>
+                  <PoiDetail />
+                </RequireTour>
               </RequireUser>
             }
           />
 
-          {/* ========================= */}
-          {/* MAP                        */}
-          {/* ========================= */}
+          {/* =================================================
+             MAP
+          ================================================= */}
 
           <Route
             path="/map"
             element={
               <RequireUser>
-                <UserMap />
+                <RequireTour>
+                  <UserMap />
+                </RequireTour>
               </RequireUser>
             }
           />
 
-          {/* ========================= */}
-          {/* CHAT                       */}
-          {/* ========================= */}
+          {/* =================================================
+             CHAT
+          ================================================= */}
 
           <Route
             path="/chat"
             element={
               <RequireUser>
-                <UserChat />
+                <RequireTour>
+                  <UserChat />
+                </RequireTour>
               </RequireUser>
             }
           />
 
-          {/* ========================= */}
-          {/* PROFILE                    */}
-          {/* ========================= */}
+          {/* =================================================
+             PROFILE
+          ================================================= */}
 
           <Route
             path="/profile"
@@ -167,9 +246,9 @@ function App() {
             }
           />
 
-          {/* ========================= */}
-          {/* ADD POI                    */}
-          {/* ========================= */}
+          {/* =================================================
+             ADD POI
+          ================================================= */}
 
           <Route
             path="/add-poi"
@@ -180,9 +259,9 @@ function App() {
             }
           />
 
-          {/* ========================= */}
-          {/* FALLBACK                   */}
-          {/* ========================= */}
+          {/* =================================================
+             FALLBACK
+          ================================================= */}
 
           <Route
             path="*"
@@ -193,7 +272,6 @@ function App() {
               />
             }
           />
-
         </Routes>
       </PoiProvider>
     </BrowserRouter>

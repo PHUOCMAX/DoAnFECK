@@ -5,7 +5,9 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { fileURLToPath } from "node:url";
 
-const projectDirectory = fileURLToPath(new URL(".", import.meta.url));
+const projectDirectory = fileURLToPath(
+  new URL(".", import.meta.url)
+);
 
 export default defineConfig({
   plugins: [
@@ -16,7 +18,15 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(projectDirectory, "./src"),
-      "@shared": path.resolve(projectDirectory, "../../shared"),
+      "@shared": path.resolve(
+        projectDirectory,
+        "../../shared"
+      ),
     },
+  },
+
+  server: {
+    host: "0.0.0.0",
+    port: 5173,
   },
 });

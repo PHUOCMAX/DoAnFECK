@@ -10,6 +10,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@andresaya/edge-tts": "^1.8.1",
     "@google/genai": "^2.24.0",
     "@qdrant/js-client-rest": "^1.19.0",
     "bcryptjs": "^3.0.2",

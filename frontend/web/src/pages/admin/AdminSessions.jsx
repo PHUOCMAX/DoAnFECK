@@ -8,10 +8,17 @@ import {
   X,
 } from "lucide-react";
 
-import { QRCodeSVG } from "qrcode.react";
+import {
+  QRCodeSVG,
+} from "qrcode.react";
 
 const API_URL = (
   import.meta.env.VITE_API_URL || ""
+).replace(/\/+$/, "");
+
+const PUBLIC_WEB_URL = (
+  import.meta.env.VITE_WEB_BASE_URL ||
+  window.location.origin
 ).replace(/\/+$/, "");
 
 const EMPTY_FORM = {
@@ -22,7 +29,9 @@ const EMPTY_FORM = {
 };
 
 function formatDate(value) {
-  if (!value) return "—";
+  if (!value) {
+    return "—";
+  }
 
   const date = new Date(value);
 
@@ -37,27 +46,25 @@ function formatDate(value) {
 }
 
 function formatPrice(value) {
-  return `${Number(value || 0).toLocaleString("vi-VN")} ₫`;
+  return `${Number(
+    value || 0
+  ).toLocaleString("vi-VN")} ₫`;
 }
 
 export default function AdminSessions() {
   const [form, setForm] = useState(EMPTY_FORM);
-
   const [session, setSession] = useState(null);
 
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState("");
-
   const [success, setSuccess] = useState("");
 
   const [qr, setQr] = useState(null);
-
   const [qrLoading, setQrLoading] = useState(false);
-
   const [qrError, setQrError] = useState("");
 
-  const token = localStorage.getItem("admin_token");
+  const token =
+    localStorage.getItem("admin_token");
 
   function updateField(field, value) {
     setForm((current) => ({
@@ -70,7 +77,9 @@ export default function AdminSessions() {
     event.preventDefault();
 
     if (!token) {
-      setError("Phiên đăng nhập đã hết hạn.");
+      setError(
+        "Phiên đăng nhập đã hết hạn."
+      );
       return;
     }
 
@@ -84,7 +93,8 @@ export default function AdminSessions() {
       if (
         form.startsAt &&
         form.expiresAt &&
-        new Date(form.expiresAt) <= new Date(form.startsAt)
+        new Date(form.expiresAt) <=
+          new Date(form.startsAt)
       ) {
         throw new Error(
           "Thời gian kết thúc phải lớn hơn thời gian bắt đầu."
@@ -93,39 +103,50 @@ export default function AdminSessions() {
 
       const price = Number(form.price);
 
-      if (!Number.isFinite(price) || price < 0) {
+      if (
+        !Number.isFinite(price) ||
+        price < 0
+      ) {
         throw new Error(
           "Giá phiên tham quan phải lớn hơn hoặc bằng 0."
         );
       }
 
-      // =========================
-      // 1. TẠO SESSION
-      // =========================
+      const response = await fetch(
+        `${API_URL}/api/sessions`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type":
+              "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name:
+              form.name.trim() || null,
+            startsAt:
+              form.startsAt || null,
+            expiresAt:
+              form.expiresAt || null,
+          }),
+        }
+      );
 
-      const response = await fetch(`${API_URL}/api/sessions`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: form.name.trim() || null,
-          startsAt: form.startsAt || null,
-          expiresAt: form.expiresAt || null,
-        }),
-      });
-
-      const data = await response.json().catch(() => null);
+      const data =
+        await response
+          .json()
+          .catch(() => null);
 
       if (!response.ok) {
         throw new Error(
-          data?.message || "Không thể tạo phiên tham quan."
+          data?.message ||
+            "Không thể tạo phiên tham quan."
         );
       }
 
-      const createdSession = data?.session;
+      const createdSession =
+        data?.session;
 
       if (!createdSession?.id) {
         throw new Error(
@@ -133,28 +154,27 @@ export default function AdminSessions() {
         );
       }
 
-      // =========================
-      // 2. CẬP NHẬT GIÁ SESSION
-      // =========================
+      const priceResponse =
+        await fetch(
+          `${API_URL}/api/sessions/${createdSession.id}/price`,
+          {
+            method: "PATCH",
+            headers: {
+              Accept: "application/json",
+              "Content-Type":
+                "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              price,
+            }),
+          }
+        );
 
-      const priceResponse = await fetch(
-        `${API_URL}/api/sessions/${createdSession.id}/price`,
-        {
-          method: "PATCH",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            price,
-          }),
-        }
-      );
-
-      const priceData = await priceResponse
-        .json()
-        .catch(() => null);
+      const priceData =
+        await priceResponse
+          .json()
+          .catch(() => null);
 
       if (!priceResponse.ok) {
         throw new Error(
@@ -175,7 +195,8 @@ export default function AdminSessions() {
       setForm(EMPTY_FORM);
     } catch (err) {
       setError(
-        err?.message || "Không thể tạo phiên tham quan."
+        err?.message ||
+          "Không thể tạo phiên tham quan."
       );
     } finally {
       setLoading(false);
@@ -199,26 +220,32 @@ export default function AdminSessions() {
     setQrError("");
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/sessions/${session.id}/qr`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            poiId: null,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_URL}/api/sessions/${session.id}/qr`,
+          {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type":
+                "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              poiId: null,
+            }),
+          }
+        );
 
-      const data = await response.json().catch(() => null);
+      const data =
+        await response
+          .json()
+          .catch(() => null);
 
       if (!response.ok) {
         throw new Error(
-          data?.message || "Không thể tạo mã QR."
+          data?.message ||
+            "Không thể tạo mã QR."
         );
       }
 
@@ -231,12 +258,19 @@ export default function AdminSessions() {
       setQr(data.qr);
     } catch (err) {
       setQrError(
-        err?.message || "Không thể tạo mã QR."
+        err?.message ||
+          "Không thể tạo mã QR."
       );
     } finally {
       setQrLoading(false);
     }
   }
+
+  const qrUrl = qr?.qr_token
+    ? `${PUBLIC_WEB_URL}/scan-qr?qrToken=${encodeURIComponent(
+        qr.qr_token
+      )}`
+    : "";
 
   return (
     <section className="space-y-6">
@@ -265,7 +299,6 @@ export default function AdminSessions() {
             onSubmit={createSession}
             className="mt-6 space-y-5"
           >
-            {/* Tên */}
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-slate-700">
                 Tên phiên
@@ -275,15 +308,17 @@ export default function AdminSessions() {
                 type="text"
                 value={form.name}
                 onChange={(event) =>
-                  updateField("name", event.target.value)
+                  updateField(
+                    "name",
+                    event.target.value
+                  )
                 }
-                placeholder="Ví dụ: Tour Dinh Độc Lập"
+                placeholder="Ví dụ: Tour Linh Ứng"
                 required
                 className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
               />
             </label>
 
-            {/* Giá */}
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-slate-700">
                 Giá tham quan (VNĐ)
@@ -295,7 +330,10 @@ export default function AdminSessions() {
                 step="1000"
                 value={form.price}
                 onChange={(event) =>
-                  updateField("price", event.target.value)
+                  updateField(
+                    "price",
+                    event.target.value
+                  )
                 }
                 placeholder="Ví dụ: 50000"
                 required
@@ -307,7 +345,6 @@ export default function AdminSessions() {
               </p>
             </label>
 
-            {/* Thời gian */}
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-slate-700">
@@ -348,14 +385,12 @@ export default function AdminSessions() {
               </label>
             </div>
 
-            {/* Error */}
             {error && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
-            {/* Success */}
             {success && (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                 {success}
@@ -413,7 +448,6 @@ export default function AdminSessions() {
             </div>
           ) : (
             <div className="mt-6 space-y-4">
-              {/* ID */}
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   ID phiên
@@ -424,29 +458,29 @@ export default function AdminSessions() {
                 </p>
               </div>
 
-              {/* Tên */}
               <div className="rounded-2xl border border-slate-200 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Tên phiên
                 </p>
 
                 <p className="mt-1 font-semibold text-slate-900">
-                  {session.name || "Không có tên"}
+                  {session.name ||
+                    "Không có tên"}
                 </p>
               </div>
 
-              {/* Giá */}
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">
                   Giá tham quan
                 </p>
 
                 <p className="mt-1 text-xl font-bold text-amber-700">
-                  {formatPrice(session.price)}
+                  {formatPrice(
+                    session.price
+                  )}
                 </p>
               </div>
 
-              {/* Thời gian */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -454,7 +488,9 @@ export default function AdminSessions() {
                   </p>
 
                   <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {formatDate(session.starts_at)}
+                    {formatDate(
+                      session.starts_at
+                    )}
                   </p>
                 </div>
 
@@ -464,25 +500,30 @@ export default function AdminSessions() {
                   </p>
 
                   <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {formatDate(session.expires_at)}
+                    {formatDate(
+                      session.expires_at
+                    )}
                   </p>
                 </div>
               </div>
 
-              {/* Trạng thái */}
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
                   Trạng thái
                 </p>
 
                 <p className="mt-1 font-bold text-emerald-700">
-                  {session.status === "active"
+                  {session.status ===
+                  "active"
                     ? "Đang hoạt động"
-                    : session.status || "Không xác định"}
+                    : session.status ||
+                      "Không xác định"}
                 </p>
               </div>
 
-              {/* QR vào tour */}
+              {/* =========================
+                  QR VÀO TOUR
+              ========================== */}
               <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -491,7 +532,7 @@ export default function AdminSessions() {
                     </p>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Khách dùng QR này để vào phiên tham quan.
+                      Khách dùng Camera điện thoại để quét mã này.
                     </p>
                   </div>
 
@@ -532,7 +573,7 @@ export default function AdminSessions() {
                   <div className="mt-4 flex flex-col items-center">
                     <div className="rounded-2xl bg-white p-4 shadow-sm">
                       <QRCodeSVG
-                        value={qr.qr_token}
+                        value={qrUrl}
                         size={220}
                         level="M"
                       />
@@ -542,14 +583,17 @@ export default function AdminSessions() {
                       Quét mã để vào tour
                     </p>
 
-                    <p className="mt-2 max-w-full break-all text-center font-mono text-xs leading-5 text-slate-500">
-                      {qr.qr_token}
+                    <p className="mt-2 w-full break-all text-center font-mono text-xs leading-5 text-slate-500">
+                      {qrUrl}
+                    </p>
+
+                    <p className="mt-4 w-full break-all rounded-xl bg-white px-3 py-2 font-mono text-[11px] leading-5 text-slate-400">
+                      Token: {qr.qr_token}
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Token */}
               <div className="rounded-2xl border border-slate-200 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Mã phiên
@@ -560,10 +604,11 @@ export default function AdminSessions() {
                 </p>
               </div>
 
-              {/* Đóng */}
               <button
                 type="button"
-                onClick={resetCreatedSession}
+                onClick={
+                  resetCreatedSession
+                }
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 <X size={16} />

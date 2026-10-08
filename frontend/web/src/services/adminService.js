@@ -24,10 +24,20 @@ async function request(path, options = {}) {
   console.log("METHOD:", options.method || "GET");
   console.log("HAS AUTH:", Boolean(headers.Authorization));
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    console.error("API FETCH ERROR:", error);
+
+    throw new Error(
+      `Không thể kết nối tới máy chủ API: ${API_URL}`
+    );
+  }
 
   const data = await response.json().catch(() => null);
 
@@ -39,13 +49,10 @@ async function request(path, options = {}) {
 
   return data;
 }
-export function adminLogin(
-  email,
-  password
-) {
+
+export function adminLogin(email, password) {
   return request("/api/auth/login", {
     method: "POST",
-
     body: JSON.stringify({
       email,
       password,
@@ -53,15 +60,11 @@ export function adminLogin(
   });
 }
 
-export function getAdminPois(
-  token,
-  status = "pending"
-) {
+export function getAdminPois(token, status = "pending") {
   return request(
-    `/api/admin/pois?status=${encodeURIComponent(
-      status
-    )}`,
+    `/api/admin/pois?status=${encodeURIComponent(status)}`,
     {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -69,76 +72,47 @@ export function getAdminPois(
   );
 }
 
-export function createAdminPoi(
-  token,
-  poi
-) {
+export function createAdminPoi(token, poi) {
   return request("/api/admin/pois", {
     method: "POST",
-
     headers: {
       Authorization: `Bearer ${token}`,
     },
-
     body: poi,
   });
 }
 
-export function updateAdminPoi(
-  token,
-  poiId,
-  poi
-) {
-  return request(
-    `/api/admin/pois/${poiId}`,
-    {
-      method: "PATCH",
-
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-
-      body: poi,
-    }
-  );
+export function updateAdminPoi(token, poiId, poi) {
+  return request(`/api/admin/pois/${poiId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: poi,
+  });
 }
 
-export function reviewPoi(
-  token,
-  poiId,
-  status
-) {
-  return request(
-    `/api/admin/pois/${poiId}/status`,
-    {
-      method: "PATCH",
-
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-
-      body: JSON.stringify({
-        status,
-      }),
-    }
-  );
+export function reviewPoi(token, poiId, status) {
+  return request(`/api/admin/pois/${poiId}/status`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      status,
+    }),
+  });
 }
 
-export function deleteAdminPoi(
-  token,
-  poiId
-) {
-  return request(
-    `/api/admin/pois/${poiId}`,
-    {
-      method: "DELETE",
-
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+export function deleteAdminPoi(token, poiId) {
+  return request(`/api/admin/pois/${poiId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
+
 export function getAdminUsers(token, query = "") {
   return request(`/api/admin/users${query}`, {
     method: "GET",
@@ -148,31 +122,21 @@ export function getAdminUsers(token, query = "") {
   });
 }
 
-export function updateAdminUserRole(
-  token,
-  userId,
-  role
-) {
+export function updateAdminUserRole(token, userId, role) {
   return request(`/api/admin/users/${userId}/role`, {
     method: "PATCH",
-
     headers: {
       Authorization: `Bearer ${token}`,
     },
-
     body: JSON.stringify({
       role,
     }),
   });
 }
 
-export function deleteAdminUser(
-  token,
-  userId
-) {
+export function deleteAdminUser(token, userId) {
   return request(`/api/admin/users/${userId}`, {
     method: "DELETE",
-
     headers: {
       Authorization: `Bearer ${token}`,
     },

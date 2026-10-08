@@ -3,7 +3,7 @@ import {
   SUPPORTED_LANGUAGES,
   validatePoiPayload,
 } from "../utils/poiValidation.js";
-
+import { queuePoiAudioGeneration } from "../services/audioPipelineService.js";
 function createEmptyLocalizedObject() {
   return Object.fromEntries(
     SUPPORTED_LANGUAGES.map((language) => [language, ""])
@@ -363,6 +363,7 @@ export async function createPoi(req, res, next) {
 
     await connection.commit();
 
+    queuePoiAudioGeneration(Number(poiId));
     console.log(
       "CREATE POI COMMIT SUCCESS:",
       poiId

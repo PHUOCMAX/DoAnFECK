@@ -1,5 +1,5 @@
 import pool from "../config/db.js";
-
+import { queuePoiAudioGeneration } from "../services/audioPipelineService.js";
 import {
   SUPPORTED_LANGUAGES,
   validatePoiPayload,
@@ -406,7 +406,9 @@ export async function createAdminPoi(
       translations,
       poi.audio
     );
-
+    queuePoiAudioGeneration(
+  Number(poiId)
+);
     const createdPoi =
       await getPoiById(poiId);
 
@@ -626,6 +628,9 @@ export async function updateAdminPoi(
     );
 
     await connection.commit();
+    queuePoiAudioGeneration(
+  Number(poiId)
+);
 
     const savedPoi =
       await getPoiById(poiId);

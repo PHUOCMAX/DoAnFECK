@@ -33,12 +33,14 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 import ChatScreen from "./src/screens/ChatScreen";
 
 import { useAppStore } from "./src/store/useAppStore";
-import { usePoiStore } from "./src/store/usePoiStore";
+
 import { getTranslations } from "./src/translations";
 
 export type RootStackParamList = {
   Login: undefined;
-  Home: undefined;
+  Home: {
+  tourAuthorized?: boolean;
+};
   History: undefined;
 
   PoiDetail: {
@@ -254,7 +256,7 @@ function ScanQRScreen() {
           {
             text: "Vào tour",
             onPress: () => {
-              navigation.replace("Home");
+              navigation.replace("ScanQR");
             },
           },
         ]
@@ -487,9 +489,9 @@ function ScanQRScreen() {
                 {
                   text: "Vào tour",
                   onPress: () => {
-                    navigation.replace(
-                      "Home"
-                    );
+                    navigation.replace("Home", {
+  tourAuthorized: true,
+});
                   },
                 },
               ]
@@ -539,31 +541,54 @@ function ScanQRScreen() {
     pendingQrToken,
   ]);
 
-  const handleBarcodeScanned = ({
-    data,
-  }: {
-    data: string;
-  }) => {
-    if (
-      scanned ||
-      processing
-    ) {
-      return;
+ const handleBarcodeScanned = ({
+  data,
+}: {
+  data: string;
+}) => {
+  if (scanned || processing) {
+    return;
+  }
+
+  if (
+    typeof data !== "string" ||
+    !data.trim()
+  ) {
+    return;
+  }
+
+  let qrToken = data.trim();
+
+  try {
+    const url = new URL(qrToken);
+
+    const tokenFromUrl =
+      url.searchParams.get("qrToken") ||
+      url.searchParams.get("token");
+
+    if (tokenFromUrl) {
+      qrToken = tokenFromUrl.trim();
     }
+  } catch {
+    // QR có thể chỉ chứa token thuần,
+    // nên giữ nguyên qrToken.
+  }
 
-    if (
-      typeof data !== "string" ||
-      !data.trim()
-    ) {
-      return;
-    }
-
-    setScanned(true);
-
-    void authorizeSession(
-      data.trim()
+  if (!qrToken) {
+    Alert.alert(
+      "QR không hợp lệ",
+      "Không tìm thấy mã phiên trong QR."
     );
-  };
+    return;
+  }
+
+  console.log("QR RAW DATA:", data);
+  console.log("QR TOKEN:", qrToken);
+
+  setScanned(true);
+
+  void authorizeSession(qrToken);
+};
 
   if (!permission) {
     return (
@@ -641,6 +666,12 @@ function ScanQRScreen() {
   // =========================
   // PAYMENT SCREEN
   // =========================
+if (
+  paymentRequired &&
+  paymentSession
+) {
+  const isPending =
+    payment?.status === "pending";
 
   if (
     paymentRequired &&
@@ -881,12 +912,319 @@ function ScanQRScreen() {
     );
   }
 
+  const isPaid =
+    payment?.status === "paid";
   return (
     <View
       style={
-        styles.scanContainer
+        styles.paymentContainer
       }
     >
+      <View
+        style={
+          styles.paymentCard
+        }
+      >
+        <Text
+          style={
+            styles.paymentTitle
+          }
+        >
+          Thanh toán để vào tour
+        </Text>
+
+        <Text
+          style={
+            styles.paymentDescription
+          }
+        >
+          Phiên tham quan này yêu
+          cầu thanh toán trước khi
+          cấp quyền vào tour.
+        </Text>
+
+        {/* =========================
+            AMOUNT
+        ========================= */}
+
+        <View
+          style={
+            styles.paymentAmountBox
+          }
+        >
+          <Text
+            style={
+              styles.paymentAmountLabel
+            }
+          >
+            Số tiền
+          </Text>
+
+          <Text
+            style={
+              styles.paymentAmountValue
+            }
+          >
+            {Number(
+              paymentSession.price || 0
+            ).toLocaleString(
+              "vi-VN"
+            )}{" "}
+            ₫
+          </Text>
+        </View>
+
+        {/* =========================
+            PAYMENT METHOD
+        ========================= */}
+
+        {!isPending &&
+          !isPaid && (
+            <>
+              <Text
+                style={
+                  styles.paymentMethodTitle
+                }
+              >
+                Chọn phương thức thanh toán
+              </Text>
+
+              {/* ONLINE */}
+
+              <Pressable
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod ===
+                    "online" &&
+                    styles.paymentMethodCardActive,
+                ]}
+                onPress={() =>
+                  setPaymentMethod(
+                    "online"
+                  )
+                }
+                disabled={
+                  paymentLoading
+                }
+              >
+                <View
+                  style={
+                    styles.paymentMethodTextWrap
+                  }
+                >
+                  <Text
+                    style={
+                      styles.paymentMethodName
+                    }
+                  >
+                    Thanh toán online
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.paymentMethodDescription
+                    }
+                  >
+                    Thanh toán trực tuyến
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.paymentRadio,
+                    paymentMethod ===
+                      "online" &&
+                      styles.paymentRadioActive,
+                  ]}
+                />
+              </Pressable>
+
+              {/* OFFLINE */}
+
+              <Pressable
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod ===
+                    "offline" &&
+                    styles.paymentMethodCardActive,
+                ]}
+                onPress={() =>
+                  setPaymentMethod(
+                    "offline"
+                  )
+                }
+                disabled={
+                  paymentLoading
+                }
+              >
+                <View
+                  style={
+                    styles.paymentMethodTextWrap
+                  }
+                >
+                  <Text
+                    style={
+                      styles.paymentMethodName
+                    }
+                  >
+                    Thanh toán tại quầy
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.paymentMethodDescription
+                    }
+                  >
+                    Thanh toán tiền mặt,
+                    Admin xác nhận
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.paymentRadio,
+                    paymentMethod ===
+                      "offline" &&
+                      styles.paymentRadioActive,
+                  ]}
+                />
+              </Pressable>
+            </>
+          )}
+
+        {/* =========================
+            TRANSACTION CODE
+        ========================= */}
+
+        {payment?.transaction_code && (
+          <View
+            style={
+              styles.paymentInfoBox
+            }
+          >
+            <Text
+              style={
+                styles.paymentInfoLabel
+              }
+            >
+              Mã giao dịch
+            </Text>
+
+            <Text
+              style={
+                styles.paymentInfoValue
+              }
+            >
+              {payment.transaction_code}
+            </Text>
+          </View>
+        )}
+
+        {/* =========================
+            PAYMENT STATUS
+        ========================= */}
+
+        {isPaid ? (
+          <Text
+            style={
+              styles.paymentStatusSuccess
+            }
+          >
+            Thanh toán đã hoàn tất.
+            Đang cấp quyền vào tour...
+          </Text>
+        ) : isPending ? (
+          <Text
+            style={
+              styles.paymentStatusPending
+            }
+          >
+            {paymentMethod ===
+            "offline"
+              ? "Đang chờ Admin xác nhận thanh toán tại quầy..."
+              : "Đang chờ xác nhận thanh toán..."}
+          </Text>
+        ) : (
+          <Pressable
+            style={
+              styles.paymentButton
+            }
+            onPress={
+              createPayment
+            }
+            disabled={
+              paymentLoading
+            }
+          >
+            <Text
+              style={
+                styles.paymentButtonText
+              }
+            >
+              {paymentLoading
+                ? "Đang tạo yêu cầu..."
+                : paymentMethod ===
+                  "online"
+                ? "Thanh toán online"
+                : "Đăng ký thanh toán tại quầy"}
+            </Text>
+          </Pressable>
+        )}
+
+        {/* =========================
+            ERROR
+        ========================= */}
+
+        {paymentError ? (
+          <Text
+            style={
+              styles.paymentError
+            }
+          >
+            {paymentError}
+          </Text>
+        ) : null}
+
+        {/* =========================
+            DESCRIPTION
+        ========================= */}
+
+        <Text
+          style={
+            styles.paymentDemoText
+          }
+        >
+          {paymentMethod === "online"
+            ? "Thanh toán online hiện đang ở chế độ demo, chưa kết nối cổng thanh toán thực tế."
+            : "Thanh toán tại quầy sẽ được Admin xác nhận sau khi nhận tiền."}
+        </Text>
+
+        {/* =========================
+            RESET QR
+        ========================= */}
+
+        <Pressable
+          style={
+            styles.paymentSecondaryButton
+          }
+          onPress={
+            resetScanner
+          }
+        >
+          <Text
+            style={
+              styles.paymentSecondaryButtonText
+            }
+          >
+            Quét QR khác
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+ return (
+    <View style={styles.scanContainer}>
       <CameraView
         style={styles.camera}
         facing="back"
@@ -900,39 +1238,18 @@ function ScanQRScreen() {
         }
       />
 
-      <View
-        style={
-          styles.scanOverlay
-        }
-      >
-        <View
-          style={
-            styles.scanHeader
-          }
-        >
-          <Text
-            style={
-              styles.scanTitle
-            }
-          >
+      <View style={styles.scanOverlay}>
+        <View style={styles.scanHeader}>
+          <Text style={styles.scanTitle}>
             Quét QR
           </Text>
 
-          <Text
-            style={
-              styles.scanSubtitle
-            }
-          >
-            Đưa mã QR vào khung để
-            tham gia tour
+          <Text style={styles.scanSubtitle}>
+            Đưa mã QR vào khung để tham gia tour
           </Text>
         </View>
 
-        <View
-          style={
-            styles.scanFrame
-          }
-        >
+        <View style={styles.scanFrame}>
           <View
             style={[
               styles.corner,
@@ -962,42 +1279,22 @@ function ScanQRScreen() {
           />
         </View>
 
-        <View
-          style={
-            styles.scanBottom
-          }
-        >
+        <View style={styles.scanBottom}>
           {processing ? (
-            <Text
-              style={
-                styles.scanProcessingText
-              }
-            >
+            <Text style={styles.scanProcessingText}>
               Đang xác thực QR...
             </Text>
           ) : scanned ? (
             <Pressable
-              style={
-                styles.scanRetryButton
-              }
-              onPress={
-                resetScanner
-              }
+              style={styles.scanRetryButton}
+              onPress={resetScanner}
             >
-              <Text
-                style={
-                  styles.scanRetryButtonText
-                }
-              >
+              <Text style={styles.scanRetryButtonText}>
                 Quét lại
               </Text>
             </Pressable>
           ) : (
-            <Text
-              style={
-                styles.scanHint
-              }
-            >
+            <Text style={styles.scanHint}>
               Đặt QR chính giữa khung
             </Text>
           )}
@@ -1024,54 +1321,17 @@ export default function App() {
     (state) => state.isLoggedIn
   );
 
-  const token = useAppStore(
-    (state) => state.token
-  );
+
 
   const loadLanguage = useAppStore(
     (state) => state.loadLanguage
   );
-
-  const loadPois = usePoiStore(
-    (state) => state.loadPois
-  );
-
-  const resetPois = usePoiStore(
-    (state) => state.resetPois
-  );
-
+  
   useEffect(() => {
     loadLanguage();
   }, [loadLanguage]);
 
-  useEffect(() => {
-    if (!initialized) {
-      return;
-    }
-
-    if (
-      !isLoggedIn ||
-      !token
-    ) {
-      resetPois();
-      return;
-    }
-
-    void loadPois(token).catch(
-      (error) => {
-        console.warn(
-          "Failed to load POIs:",
-          error
-        );
-      }
-    );
-  }, [
-    initialized,
-    isLoggedIn,
-    token,
-    loadPois,
-    resetPois,
-  ]);
+ 
 
   const texts =
     getTranslations(language);
@@ -1082,116 +1342,98 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{
-          headerBackTitle: "",
+    <Stack.Navigator
+  screenOptions={{
+    headerBackTitle: "",
+  }}
+>
+
+  {!isLoggedIn ? (
+    <Stack.Group navigationKey="guest">
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+        options={{
+          headerShown: false,
         }}
-      >
-        {!isLoggedIn ? (
-          <>
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-              options={{
-                headerShown: false,
-              }}
-            />
+      />
 
-            <Stack.Screen
-              name="Register"
-              component={
-                RegisterScreen
-              }
-              options={{
-                headerShown: false,
-              }}
-            />
-          </>
-        ) : (
-          <>
-            <Stack.Screen
-              name="Home"
-              component={HomeScreen}
-              options={{
-                headerShown: false,
-              }}
-            />
+      <Stack.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+    </Stack.Group>
+  ) : (
+    <Stack.Group navigationKey="user">
+       <Stack.Screen
+    name="Home"
+    component={HomeScreen}
+    options={{
+      headerShown: false,
+    }}
+  />
 
-            <Stack.Screen
-              name="History"
-              component={
-                HistoryScreen
-              }
-              options={{
-                title:
-                  texts.history.title,
-              }}
-            />
+  <Stack.Screen
+    name="ScanQR"
+    component={ScanQRScreen}
+    options={{
+      headerShown: false,
+    }}
+  />
 
-            <Stack.Screen
-              name="Profile"
-              component={
-                ProfileScreen
-              }
-              options={{
-                title:
-                  texts.common.profile,
-              }}
-            />
+      <Stack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: texts.history.title,
+        }}
+      />
 
-            <Stack.Screen
-              name="AddPoi"
-              component={
-                AddPoiScreen
-              }
-              options={{
-                title:
-                  texts.addPoi.title,
-              }}
-            />
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          title: texts.common.profile,
+        }}
+      />
 
-            <Stack.Screen
-              name="Chat"
-              component={ChatScreen}
-              options={{
-                title:
-                  "AI Tour Guide",
-              }}
-            />
+      <Stack.Screen
+        name="AddPoi"
+        component={AddPoiScreen}
+        options={{
+          title: texts.addPoi.title,
+        }}
+      />
 
-            <Stack.Screen
-              name="ScanQR"
-              component={
-                ScanQRScreen
-              }
-              options={{
-                title: "Quét QR",
-              }}
-            />
+      <Stack.Screen
+        name="Chat"
+        component={ChatScreen}
+        options={{
+          title: "AI Tour Guide",
+        }}
+      />
 
-            <Stack.Screen
-              name="PoiDetail"
-              component={
-                PoiDetailScreen
-              }
-              options={{
-                title:
-                  texts.common
-                    .viewDetail,
-              }}
-            />
+      <Stack.Screen
+        name="PoiDetail"
+        component={PoiDetailScreen}
+        options={{
+          title: texts.common.viewDetail,
+        }}
+      />
 
-            <Stack.Screen
-              name="Map"
-              component={MapScreen}
-              options={{
-                title:
-                  texts.common.map,
-              }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
+      <Stack.Screen
+        name="Map"
+        component={MapScreen}
+        options={{
+          title: texts.common.map,
+        }}
+      />
+    </Stack.Group>
+  )}
+</Stack.Navigator>
     </NavigationContainer>
   );
 }
@@ -1390,7 +1632,7 @@ const styles =
       fontWeight: "900",
       
     },
-    paymentContainer: {
+   paymentContainer: {
   flex: 1,
   backgroundColor: "#F5F7FA",
   paddingHorizontal: 20,
@@ -1401,6 +1643,7 @@ paymentCard: {
   backgroundColor: "#FFFFFF",
   borderRadius: 24,
   padding: 22,
+
   shadowColor: "#000000",
   shadowOffset: {
     width: 0,
@@ -1408,6 +1651,7 @@ paymentCard: {
   },
   shadowOpacity: 0.08,
   shadowRadius: 12,
+
   elevation: 4,
 },
 
@@ -1447,35 +1691,15 @@ paymentAmountValue: {
   fontWeight: "900",
 },
 
-paymentInfoBox: {
-  marginTop: 14,
-  padding: 14,
-  borderRadius: 14,
-  backgroundColor: "#F5F5F5",
-},
-
-paymentInfoLabel: {
-  color: "#777777",
-  fontSize: 12,
-  fontWeight: "700",
-},
-
-paymentInfoValue: {
-  marginTop: 5,
-  color: "#222222",
-  fontSize: 12,
-  fontWeight: "800",
-},
-
-paymentMethodSection: {
-  marginTop: 20,
-},
 
 paymentMethodTitle: {
+  marginTop: 20,
+  marginBottom: 10,
   fontSize: 14,
   fontWeight: "900",
   color: "#171717",
-  marginBottom: 10,
+
+
 },
 
 paymentMethodCard: {
@@ -1483,9 +1707,11 @@ paymentMethodCard: {
   flexDirection: "row",
   alignItems: "center",
   justifyContent: "space-between",
+
   paddingHorizontal: 16,
   paddingVertical: 14,
   marginBottom: 10,
+
   borderWidth: 1,
   borderColor: "#E1E5EA",
   borderRadius: 16,
@@ -1519,6 +1745,7 @@ paymentRadio: {
   width: 20,
   height: 20,
   borderRadius: 10,
+
   borderWidth: 2,
   borderColor: "#B8BEC7",
 },
@@ -1527,6 +1754,33 @@ paymentRadioActive: {
   borderWidth: 6,
   borderColor: "#168DCC",
 },
+
+paymentInfoBox: {
+  marginTop: 14,
+  padding: 14,
+  borderRadius: 14,
+  backgroundColor: "#F5F5F5",
+},
+
+paymentInfoLabel: {
+  color: "#777777",
+  fontSize: 12,
+  fontWeight: "700",
+},
+
+paymentInfoValue: {
+  marginTop: 5,
+  color: "#222222",
+  fontSize: 12,
+  fontWeight: "800",
+},
+
+paymentMethodSection: {
+  marginTop: 20,
+},
+
+
+
 
 paymentButton: {
   marginTop: 18,
@@ -1546,8 +1800,10 @@ paymentStatusPending: {
   marginTop: 18,
   padding: 14,
   borderRadius: 14,
+
   backgroundColor: "#FFF7E6",
   color: "#9A6700",
+
   fontSize: 14,
   lineHeight: 21,
   fontWeight: "800",
@@ -1558,8 +1814,10 @@ paymentStatusSuccess: {
   marginTop: 18,
   padding: 14,
   borderRadius: 14,
+
   backgroundColor: "#EAF8EF",
   color: "#18794E",
+
   fontSize: 14,
   lineHeight: 21,
   fontWeight: "800",
