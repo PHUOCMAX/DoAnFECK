@@ -13,7 +13,7 @@ import { useNavigation,useRoute, } from "@react-navigation/native";
 
 import { useAppStore } from "../store/useAppStore";
 import { getTranslations } from "../translations";
-
+import { usePoiStore } from "../store/usePoiStore";
 import { useNativeLocation } from "../hooks/useNativeLocation";
 import { useGeofenceEngine } from "../hooks/useGeofenceEngine";
 import { calculateDistance } from "../utils/geoHelpers";
@@ -22,7 +22,7 @@ import { playPoiNarration } from "../services/narrationService";
 
 import OfflineMapView from "../components/map/OfflineMapView";
 import LanguageMenu from "../components/common/LanguageMenu";
-import { usePoiStore } from "src/store/usePoiStore";
+
 
 type CategoryFilter = "all" | "tourism" | "food";
 
@@ -139,7 +139,7 @@ useEffect(() => {
   /* ================= GEOFENCE ================= */
 
   useGeofenceEngine({
-    location: location,
+    location,
 
     onPoiEnter: (poiId) => {
       console.log(
@@ -684,16 +684,25 @@ const requireTour = () => {
         </View>
       )}
 
-      {location && (
-        <View style={styles.locationStatus}>
-          <Text style={styles.locationStatusText}>
-            📍 {common.gpsLocation}:{" "}
-            {location.latitude.toFixed(5)}
-            ,{" "}
-            {location.longitude.toFixed(5)}
-          </Text>
-        </View>
-      )}
+      {permissionGranted &&
+        location && (
+          <View
+            style={styles.locationStatus}
+          >
+            <Text
+              style={styles.locationStatusText}
+            >
+              📍 {common.gpsLocation}:{" "}
+              {location.latitude.toFixed(
+                5
+              )}
+              ,{" "}
+              {location.longitude.toFixed(
+                5
+              )}
+            </Text>
+          </View>
+        )}
 
       {locationError && (
         <View
@@ -707,7 +716,7 @@ const requireTour = () => {
         </View>
       )}
 
-    {/* ================= POI CONTENT ================= */}
+      {/* ================= POI CONTENT ================= */}
 
       <ScrollView
         style={styles.poiScroll}
@@ -1079,8 +1088,8 @@ const requireTour = () => {
             style={styles.bottomText}
           >
             {language === "vi"
-              ? "Vào tour"
-              : "Join tour"}
+              ? "Quét QR"
+              : "Scan QR"}
           </Text>
         </Pressable>
 

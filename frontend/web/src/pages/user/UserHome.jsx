@@ -80,11 +80,10 @@ export default function UserHome() {
               </p>
 
               {!authorized ? (
-                <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/90">
-                  Tham gia tour bằng mã QR để mở dữ liệu địa điểm,
-                  bản đồ, GPS, thuyết minh và AI Tour Guide.
-                </p>
-              ) : null}
+  <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/90">
+    {t.tourAccessIntro}
+  </p>
+) : null}
             </div>
 
             {/* HERO ACTIONS */}
@@ -103,7 +102,7 @@ export default function UserHome() {
                   className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-extrabold text-[#2196F3]"
                 >
                   <QrCode size={17} />
-                  Tham gia tour
+{t.joinTour}
                 </Link>
               )}
 
@@ -139,10 +138,10 @@ export default function UserHome() {
               disabled={!authorized}
               className="w-full bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-white/70 disabled:cursor-not-allowed disabled:opacity-60"
               placeholder={
-                authorized
-                  ? t.searchPlace
-                  : "Tham gia tour để tìm địa điểm..."
-              }
+  authorized
+    ? t.searchPlace
+    : t.joinTourSearchPlaceholder
+}
             />
           </div>
         </div>
@@ -161,16 +160,12 @@ export default function UserHome() {
                 </p>
 
                 <h2 className="mt-1 text-2xl font-extrabold">
-                  Dữ liệu tour chưa được mở
-                </h2>
+  {t.tourDataLocked}
+</h2>
 
-                <p className="mt-2 text-sm leading-6 text-[#777]">
-                  Bạn đã đăng nhập nhưng chưa tham gia
-                  một tour. Hãy quét mã QR của tour để
-                  xác định session. Nếu tour yêu cầu
-                  thanh toán, hệ thống sẽ chuyển sang
-                  bước thanh toán trước khi cấp quyền.
-                </p>
+<p className="mt-2 text-sm leading-6 text-[#777]">
+  {t.tourAccessDescription}
+</p>
               </div>
 
               <Link
@@ -178,7 +173,7 @@ export default function UserHome() {
                 className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2196F3] px-5 py-3 text-sm font-extrabold text-white"
               >
                 <QrCode size={17} />
-                Tham gia tour
+                {t.joinTour}
               </Link>
             </div>
           </div>

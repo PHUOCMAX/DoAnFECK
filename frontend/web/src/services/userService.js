@@ -77,13 +77,11 @@ export function getStoredUser() {
 
 export function saveUserSession(token, user) {
   /*
-   * User mới không được kế thừa
-   * tour authorization của user trước.
+   * Không xóa tour_authorization ở đây.
+   *
+   * getTourAuthorization() sẽ kiểm tra
+   * authorization có thuộc đúng user hiện tại hay không.
    */
-  localStorage.removeItem(
-    "tour_authorization"
-  );
-
   localStorage.removeItem(
     "pending_tour_payment"
   );
@@ -102,9 +100,7 @@ export function saveUserSession(token, user) {
     new Event("user-session-changed")
   );
 
-  window.dispatchEvent(
-    new Event("tour-authorization-changed")
-  );
+  
 }
 
 export function clearUserSession() {
@@ -116,10 +112,12 @@ export function clearUserSession() {
     "user_user"
   );
 
-  localStorage.removeItem(
-    "tour_authorization"
-  );
-
+  /*
+   * Không xóa tour_authorization.
+   *
+   * Tour authorization được giữ lại để user
+   * có thể đăng nhập lại và tiếp tục tour.
+   */
   localStorage.removeItem(
     "pending_tour_payment"
   );
@@ -128,9 +126,7 @@ export function clearUserSession() {
     new Event("user-session-changed")
   );
 
-  window.dispatchEvent(
-    new Event("tour-authorization-changed")
-  );
+  
 }
 
 /* =========================================================
@@ -312,19 +308,31 @@ export function getTourAuthorization() {
      * Authorization phải thuộc
      * đúng user hiện tại.
      */
-    if (
-      !user ||
-      !authorization ||
-      Number(
-        authorization.userId
-      ) !== Number(user.id)
-    ) {
-      localStorage.removeItem(
-        "tour_authorization"
-      );
+    /*
+ * Không có authorization thì không có tour.
+ */
+if (!authorization) {
+  return null;
+}
 
-      return null;
-    }
+/*
+ * Khi logout, user hiện tại sẽ là null.
+ * Không được xóa tour authorization ở thời điểm này.
+ *
+ * Khi login lại:
+ * - đúng user -> giữ tour
+ * - user khác -> xóa tour của user cũ
+ */
+if (
+  user &&
+  Number(authorization.userId) !== Number(user.id)
+) {
+  localStorage.removeItem(
+    "tour_authorization"
+  );
+
+  return null;
+}
 
     /*
      * Kiểm tra thời gian hết hạn.

@@ -33,7 +33,7 @@ export default function UserLogin() {
             <button disabled={loading} className="w-full rounded-xl bg-[#2196f3] py-3.5 font-extrabold text-white hover:bg-[#1a7dd8] disabled:opacity-60">{loading ? "Đang đăng nhập..." : "Đăng nhập"}</button>
           </form>
           <p className="mt-6 text-center text-sm text-[#777]">Chưa có tài khoản? <Link className="font-extrabold text-[#2196f3]" to="/register">Đăng ký</Link></p>
-          <p className="mt-3 text-center text-xs text-[#aaa]"><Link to="/admin/login" className="hover:text-[#2196f3]">Admin Portal</Link></p>
+          
         </section>
       </div>
     </main>

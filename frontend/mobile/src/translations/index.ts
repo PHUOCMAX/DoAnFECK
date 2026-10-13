@@ -993,6 +993,18 @@ const HOME_UI_TEXT = {
     gpsLocation: "Vị trí GPS",
     noResults: "Không tìm thấy địa điểm",
     changeFilters: "Thử thay đổi từ khóa hoặc bộ lọc.",
+    tourAccessIntro:
+  "Tham gia tour bằng mã QR để mở dữ liệu địa điểm, bản đồ, GPS, thuyết minh và AI Tour Guide.",
+
+joinTour: "Tham gia tour",
+
+joinTourSearchPlaceholder:
+  "Tham gia tour để tìm địa điểm...",
+
+tourDataLocked: "Dữ liệu tour chưa được mở",
+
+tourAccessDescription:
+  "Bạn đã đăng nhập nhưng chưa tham gia một tour. Hãy quét mã QR của tour để xác định session. Nếu tour yêu cầu thanh toán, hệ thống sẽ chuyển sang bước thanh toán trước khi cấp quyền.",
   },
 
   en: {
@@ -1003,6 +1015,18 @@ const HOME_UI_TEXT = {
     gpsLocation: "GPS location",
     noResults: "No places found",
     changeFilters: "Try changing your search keyword or filters.",
+    tourAccessIntro:
+  "Join the tour using the QR code to unlock location data, maps, GPS, narration, and the AI Tour Guide.",
+
+joinTour: "Join tour",
+
+joinTourSearchPlaceholder:
+  "Join a tour to search for places...",
+
+tourDataLocked: "Tour data is locked",
+
+tourAccessDescription:
+  "You are logged in but have not joined a tour. Scan the tour QR code to identify the session. If payment is required, the system will proceed to payment before granting access.",
   },
 
   zh: {
@@ -1113,6 +1137,18 @@ const HOME_UI_TEXT = {
     gpsLocation: "Lokasi GPS",
     noResults: "Tempat tidak ditemukan",
     changeFilters: "Coba ubah kata kunci pencarian atau filter.",
+    tourAccessIntro:
+  "Bergabunglah dengan tur menggunakan kode QR untuk membuka data tempat, peta, GPS, narasi, dan AI Tour Guide.",
+
+joinTour: "Gabung tur",
+
+joinTourSearchPlaceholder:
+  "Bergabunglah dengan tur untuk mencari tempat...",
+
+tourDataLocked: "Data tur belum dibuka",
+
+tourAccessDescription:
+  "Anda sudah masuk tetapi belum bergabung dengan tur. Pindai kode QR tur untuk menentukan sesi. Jika tur memerlukan pembayaran, sistem akan melanjutkan ke pembayaran sebelum memberikan akses.",
   },
 
   ms: {
@@ -1135,7 +1171,247 @@ const HOME_UI_TEXT = {
     changeFilters: "खोज शब्द या फ़िल्टर बदलने का प्रयास करें।",
   },
 } as const;
+const TOUR_ACCESS_TEXT = {
+  vi: {
+    tourAccessIntro:
+      "Tham gia tour bằng mã QR để mở dữ liệu địa điểm, bản đồ, GPS, thuyết minh và AI Tour Guide.",
 
+    joinTour: "Tham gia tour",
+
+    joinTourSearchPlaceholder:
+      "Tham gia tour để tìm địa điểm...",
+
+    tourDataLocked:
+      "Dữ liệu tour chưa được mở",
+
+    tourAccessDescription:
+      "Bạn đã đăng nhập nhưng chưa tham gia một tour. Hãy quét mã QR của tour để xác định session. Nếu tour yêu cầu thanh toán, hệ thống sẽ chuyển sang bước thanh toán trước khi cấp quyền.",
+  },
+
+  en: {
+    tourAccessIntro:
+      "Join the tour using the QR code to unlock location data, maps, GPS, narration, and the AI Tour Guide.",
+
+    joinTour: "Join tour",
+
+    joinTourSearchPlaceholder:
+      "Join a tour to search for places...",
+
+    tourDataLocked:
+      "Tour data is locked",
+
+    tourAccessDescription:
+      "You are logged in but have not joined a tour. Scan the tour QR code to identify the session. If payment is required, the system will proceed to payment before granting access.",
+  },
+
+  zh: {
+    tourAccessIntro:
+      "使用二维码加入导览，解锁地点数据、地图、GPS、讲解和 AI 导游。",
+
+    joinTour: "加入导览",
+
+    joinTourSearchPlaceholder:
+      "加入导览后搜索地点...",
+
+    tourDataLocked:
+      "导览数据尚未开放",
+
+    tourAccessDescription:
+      "您已登录，但尚未加入导览。请扫描导览二维码以确定会话。如果导览需要付费，系统会先进入支付步骤，然后授予访问权限。",
+  },
+
+  ja: {
+    tourAccessIntro:
+      "QRコードを使ってツアーに参加すると、スポット情報、地図、GPS、音声ガイド、AIツアーガイドを利用できます。",
+
+    joinTour: "ツアーに参加",
+
+    joinTourSearchPlaceholder:
+      "ツアーに参加して場所を検索...",
+
+    tourDataLocked:
+      "ツアーデータはまだ利用できません",
+
+    tourAccessDescription:
+      "ログイン済みですが、まだツアーに参加していません。ツアーのQRコードをスキャンしてセッションを確認してください。支払いが必要な場合は、アクセス権を付与する前に支払い手続きに進みます。",
+  },
+
+  ko: {
+    tourAccessIntro:
+      "QR 코드를 사용하여 투어에 참여하면 장소 정보, 지도, GPS, 내레이션 및 AI 투어 가이드를 이용할 수 있습니다.",
+
+    joinTour: "투어 참여",
+
+    joinTourSearchPlaceholder:
+      "투어에 참여하여 장소 검색...",
+
+    tourDataLocked:
+      "투어 데이터가 아직 열리지 않았습니다",
+
+    tourAccessDescription:
+      "로그인했지만 아직 투어에 참여하지 않았습니다. 투어 QR 코드를 스캔하여 세션을 확인하세요. 결제가 필요한 경우 접근 권한을 부여하기 전에 결제 단계로 이동합니다.",
+  },
+
+  fr: {
+    tourAccessIntro:
+      "Rejoignez la visite avec le code QR pour accéder aux informations sur les lieux, à la carte, au GPS, aux commentaires audio et au guide touristique IA.",
+
+    joinTour: "Rejoindre la visite",
+
+    joinTourSearchPlaceholder:
+      "Rejoignez une visite pour rechercher des lieux...",
+
+    tourDataLocked:
+      "Les données de la visite ne sont pas encore disponibles",
+
+    tourAccessDescription:
+      "Vous êtes connecté, mais vous n'avez pas encore rejoint de visite. Scannez le code QR de la visite pour identifier la session. Si un paiement est requis, le système passera à l'étape de paiement avant d'accorder l'accès.",
+  },
+
+  de: {
+    tourAccessIntro:
+      "Nehmen Sie über den QR-Code an der Tour teil, um Ortsinformationen, Karte, GPS, Audioguide und den KI-Reiseführer freizuschalten.",
+
+    joinTour: "Tour beitreten",
+
+    joinTourSearchPlaceholder:
+      "Nehmen Sie an einer Tour teil, um Orte zu suchen...",
+
+    tourDataLocked:
+      "Tour-Daten sind noch nicht verfügbar",
+
+    tourAccessDescription:
+      "Sie sind angemeldet, haben aber noch an keiner Tour teilgenommen. Scannen Sie den QR-Code der Tour, um die Sitzung zu identifizieren. Falls eine Zahlung erforderlich ist, wird vor der Zugriffsfreigabe der Zahlungsschritt gestartet.",
+  },
+
+  es: {
+    tourAccessIntro:
+      "Únete al recorrido mediante el código QR para desbloquear los datos de los lugares, el mapa, el GPS, la narración y el guía turístico de IA.",
+
+    joinTour: "Unirse al recorrido",
+
+    joinTourSearchPlaceholder:
+      "Únete a un recorrido para buscar lugares...",
+
+    tourDataLocked:
+      "Los datos del recorrido aún no están disponibles",
+
+    tourAccessDescription:
+      "Has iniciado sesión, pero aún no te has unido a un recorrido. Escanea el código QR del recorrido para identificar la sesión. Si se requiere un pago, el sistema pasará al proceso de pago antes de conceder el acceso.",
+  },
+
+  it: {
+    tourAccessIntro:
+      "Partecipa al tour tramite il codice QR per sbloccare i dati dei luoghi, la mappa, il GPS, la narrazione e la guida turistica IA.",
+
+    joinTour: "Partecipa al tour",
+
+    joinTourSearchPlaceholder:
+      "Partecipa a un tour per cercare luoghi...",
+
+    tourDataLocked:
+      "I dati del tour non sono ancora disponibili",
+
+    tourAccessDescription:
+      "Hai effettuato l'accesso, ma non hai ancora partecipato a un tour. Scansiona il codice QR del tour per identificare la sessione. Se è richiesto un pagamento, il sistema procederà al pagamento prima di concedere l'accesso.",
+  },
+
+  pt: {
+    tourAccessIntro:
+      "Participe do tour usando o código QR para desbloquear os dados dos locais, mapa, GPS, narração e o guia turístico de IA.",
+
+    joinTour: "Participar do tour",
+
+    joinTourSearchPlaceholder:
+      "Participe de um tour para pesquisar locais...",
+
+    tourDataLocked:
+      "Os dados do tour ainda não estão disponíveis",
+
+    tourAccessDescription:
+      "Você está conectado, mas ainda não participou de um tour. Escaneie o código QR do tour para identificar a sessão. Se for necessário pagamento, o sistema seguirá para o pagamento antes de conceder o acesso.",
+  },
+
+  ru: {
+    tourAccessIntro:
+      "Присоединитесь к туру с помощью QR-кода, чтобы открыть данные о местах, карту, GPS, аудиогид и ИИ-гида.",
+
+    joinTour: "Присоединиться к туру",
+
+    joinTourSearchPlaceholder:
+      "Присоединитесь к туру, чтобы искать места...",
+
+    tourDataLocked:
+      "Данные тура пока недоступны",
+
+    tourAccessDescription:
+      "Вы вошли в систему, но ещё не присоединились к туру. Отсканируйте QR-код тура, чтобы определить сессию. Если требуется оплата, система сначала перейдёт к оплате, а затем предоставит доступ.",
+  },
+
+  th: {
+    tourAccessIntro:
+      "เข้าร่วมทัวร์ด้วย QR Code เพื่อเปิดข้อมูลสถานที่ แผนที่ GPS คำบรรยาย และ AI Tour Guide",
+
+    joinTour: "เข้าร่วมทัวร์",
+
+    joinTourSearchPlaceholder:
+      "เข้าร่วมทัวร์เพื่อค้นหาสถานที่...",
+
+    tourDataLocked:
+      "ข้อมูลทัวร์ยังไม่เปิด",
+
+    tourAccessDescription:
+      "คุณเข้าสู่ระบบแล้ว แต่ยังไม่ได้เข้าร่วมทัวร์ โปรดสแกน QR Code ของทัวร์เพื่อระบุเซสชัน หากทัวร์ต้องชำระเงิน ระบบจะไปยังขั้นตอนการชำระเงินก่อนให้สิทธิ์เข้าถึง",
+  },
+
+  id: {
+    tourAccessIntro:
+      "Bergabunglah dengan tur menggunakan kode QR untuk membuka data tempat, peta, GPS, narasi, dan AI Tour Guide.",
+
+    joinTour: "Gabung tur",
+
+    joinTourSearchPlaceholder:
+      "Bergabunglah dengan tur untuk mencari tempat...",
+
+    tourDataLocked:
+      "Data tur belum dibuka",
+
+    tourAccessDescription:
+      "Anda sudah masuk tetapi belum bergabung dengan tur. Pindai kode QR tur untuk menentukan sesi. Jika tur memerlukan pembayaran, sistem akan melanjutkan ke pembayaran sebelum memberikan akses.",
+  },
+
+  ms: {
+    tourAccessIntro:
+      "Sertai lawatan menggunakan kod QR untuk membuka data tempat, peta, GPS, narasi dan AI Tour Guide.",
+
+    joinTour: "Sertai lawatan",
+
+    joinTourSearchPlaceholder:
+      "Sertai lawatan untuk mencari tempat...",
+
+    tourDataLocked:
+      "Data lawatan belum dibuka",
+
+    tourAccessDescription:
+      "Anda telah log masuk tetapi belum menyertai lawatan. Imbas kod QR lawatan untuk mengenal pasti sesi. Jika pembayaran diperlukan, sistem akan meneruskan ke langkah pembayaran sebelum memberikan akses.",
+  },
+
+  hi: {
+    tourAccessIntro:
+      "स्थान डेटा, मानचित्र, GPS, विवरण और AI Tour Guide को अनलॉक करने के लिए QR कोड से टूर में शामिल हों।",
+
+    joinTour: "टूर में शामिल हों",
+
+    joinTourSearchPlaceholder:
+      "स्थान खोजने के लिए टूर में शामिल हों...",
+
+    tourDataLocked:
+      "टूर डेटा अभी उपलब्ध नहीं है",
+
+    tourAccessDescription:
+      "आप लॉग इन हैं, लेकिन अभी तक किसी टूर में शामिल नहीं हुए हैं। सत्र की पहचान करने के लिए टूर का QR कोड स्कैन करें। यदि भुगतान आवश्यक है, तो एक्सेस देने से पहले सिस्टम भुगतान प्रक्रिया पर जाएगा।",
+  },
+};
 function completeTranslation(
   language: keyof typeof HOME_UI_TEXT,
   translation: any
@@ -1145,6 +1421,7 @@ function completeTranslation(
     common: {
       ...translation.common,
       ...HOME_UI_TEXT[language],
+      ...TOUR_ACCESS_TEXT[language],
     },
   };
 }
