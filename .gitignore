@@ -49,3 +49,6 @@ ios/build/
 # Metro
 .metro-health-check*backend/uploads/
 backend/uploads/
+
+# Generated web archive
+/frontend/web.zip

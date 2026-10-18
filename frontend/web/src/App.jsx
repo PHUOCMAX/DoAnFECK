@@ -1,3 +1,4 @@
+
 import {
   BrowserRouter,
   Navigate,
@@ -5,6 +6,8 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+
+import { useEffect, useState } from "react";
 
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -26,7 +29,9 @@ import WebGeofenceEngine from "./components/user/WebGeofenceEngine";
 
 import {
   getTourAuthorization,
+  getMySessionAuthorizations,
   getUserToken,
+  saveTourAuthorization,
 } from "./services/userService";
 
 import { PoiProvider } from "./stores/PoiProvider";
@@ -70,16 +75,97 @@ function RequireUser({ children }) {
    REQUIRE TOUR
 ===================================================== */
 
+
 function RequireTour({ children }) {
   const location = useLocation();
+  const [checking, setChecking] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
-  const authorization =
-    getTourAuthorization();
+  useEffect(() => {
+    let cancelled = false;
 
-  if (
-    authorization?.status !== "active" ||
-    !authorization?.sessionId
-  ) {
+    async function checkAuthorization() {
+      const token = getUserToken();
+
+      if (!token) {
+        if (!cancelled) {
+          setAuthorized(false);
+          setChecking(false);
+        }
+        return;
+      }
+
+
+      try {
+        const data = await getMySessionAuthorizations();
+
+        console.log("MY AUTHORIZATIONS RESPONSE:", data);
+
+        const authorizations = Array.isArray(data?.authorizations)
+          ? data.authorizations
+          : [];
+
+        const activeAuthorization = authorizations.find(
+          (item) =>
+            item.status === "active" &&
+            Number(item.sessionId) > 0 &&
+            item.session?.status === "active"
+        );
+
+        console.log("ACTIVE AUTHORIZATION:", activeAuthorization);
+
+        if (cancelled) return;
+
+        if (activeAuthorization) {
+          const user = JSON.parse(
+            localStorage.getItem("user_user") || "null"
+          );
+
+          saveTourAuthorization(
+            {
+              ...activeAuthorization,
+              userId: Number(user?.id),
+              status: "active",
+              sessionId: Number(activeAuthorization.sessionId),
+            },
+            activeAuthorization.session
+          );
+
+          setAuthorized(true);
+        } else {
+          setAuthorized(false);
+        }
+      } catch (error) {
+        console.error("MY AUTHORIZATIONS ERROR:", error);
+
+        if (!cancelled) {
+          setAuthorized(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setChecking(false);
+        }
+      }
+
+    }
+
+    setChecking(true);
+    void checkAuthorization();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
+        Đang kiểm tra quyền truy cập tour...
+      </div>
+    );
+  }
+
+  if (!authorized) {
     return (
       <Navigate
         to="/scan-qr"

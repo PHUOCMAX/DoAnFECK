@@ -6,6 +6,7 @@ import {
   Pressable,
   TextInput,
   Image,
+  ActivityIndicator,
 } from "react-native";
 
 import { useMemo, useState, useEffect, } from "react";
@@ -27,7 +28,10 @@ import LanguageMenu from "../components/common/LanguageMenu";
 type CategoryFilter = "all" | "tourism" | "food";
 
 const API_URL =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, "") || "";
+  (
+    process.env.EXPO_PUBLIC_API_URL ||
+    "http://192.168.1.121:5001"
+  ).replace(/\/+$/, "");
 
 function resolveImageUrl(image?: string | null) {
   if (!image) {
@@ -58,8 +62,12 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  const tourAuthorized =
-    route.params?.tourAuthorized === true;
+  const [tourAuthorized, setTourAuthorized] = useState(
+  route.params?.tourAuthorized === true
+);
+const [checkingAuthorization, setCheckingAuthorization] =
+  useState(true);
+
 
   /* ================= APP STORE ================= */
 
@@ -69,6 +77,64 @@ export default function HomeScreen() {
 const token = useAppStore(
   (state) => state.token
 );
+useEffect(() => {
+  let cancelled = false;
+
+  async function restoreTourAuthorization() {
+  setCheckingAuthorization(true);
+  setTourAuthorized(false);
+
+  if (!token) {
+    setCheckingAuthorization(false);
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/sessions/my-authorizations`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Authorization check failed: HTTP ${response.status}`
+      );
+    }
+
+    const data = await response.json();
+
+    if (cancelled) return;
+
+    const hasActiveAuthorization =
+      data.success === true &&
+      Array.isArray(data.authorizations) &&
+      data.authorizations.length > 0;
+
+    setTourAuthorized(hasActiveAuthorization);
+  } catch (error) {
+    if (!cancelled) {
+      console.warn("Failed to restore authorization:", error);
+      setTourAuthorized(false);
+    }
+  } finally {
+    if (!cancelled) {
+      setCheckingAuthorization(false);
+    }
+  }
+}
+
+  void restoreTourAuthorization();
+
+return () => {
+  cancelled = true;
+};
+}, [token]);
   const setLanguage = useAppStore(
     (state) => state.setLanguage
   );
@@ -287,10 +353,27 @@ const requireTour = () => {
   const handleLogout = async () => {
     await logout();
   };
-
+if (checkingAuthorization) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      <ActivityIndicator size="large" color="#2563EB" />
+      <Text style={{ marginTop: 12 }}>
+        Đang kiểm tra quyền truy cập...
+      </Text>
+    </View>
+  );
+}
   /* ================= UI ================= */
 
   return (
+
     <View style={styles.screen}>
 
       {/* ================= HEADER ================= */}

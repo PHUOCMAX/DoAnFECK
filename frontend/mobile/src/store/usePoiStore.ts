@@ -49,7 +49,7 @@ export const usePoiStore = create<PoiState>((set, get) => ({
     try {
       console.log("POI: đang gọi GET /api/pois");
 
-      const response = await getPoisFromApi();
+      const response = await getPoisFromApi(token);
 
       console.log(
         "================ POI API RESPONSE ================"

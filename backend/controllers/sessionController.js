@@ -415,7 +415,8 @@ export async function authorizeByQr(
           "Session đã hết hạn.",
       });
     }
-
+console.log("AUTHORIZE USER:", req.auth?.userId);
+console.log("AUTHORIZE SESSION:", qr.session_id);
     await pool.execute(
       `
         INSERT INTO session_authorizations (
@@ -448,7 +449,25 @@ export async function authorizeByQr(
         qr.session_expires_at,
       ]
     );
+    console.log("AUTHORIZATION SAVED");
+const [checkRows] = await pool.execute(
+  `
+    SELECT
+      DATABASE() AS database_name,
+      @@hostname AS mysql_host,
+      id,
+      session_id,
+      user_id,
+      status
+    FROM session_authorizations
+    WHERE user_id = ?
+      AND session_id = ?
+  `,
+  [req.auth.userId, qr.session_id]
+);
+console.log("AUTHORIZATION DB CHECK:", checkRows);
 
+console.log("AUTHORIZATION DB CHECK:", checkRows);
     return res.json({
       success: true,
       message:
@@ -482,6 +501,95 @@ export async function authorizeByQr(
   } catch (error) {
     console.error(
       "authorizeByQr error:",
+      error
+    );
+
+    return next(error);
+  }
+}
+/* =========================================================
+   USER - GET MY ACTIVE AUTHORIZATIONS
+========================================================= */
+
+export async function getMySessionAuthorizations(
+  req,
+  res,
+  next
+) {
+    console.log("CURRENT AUTH USER:", req.auth?.userId);
+  try {
+    const userId = Number(req.auth?.userId);
+
+    if (!Number.isInteger(userId) || userId < 1) {
+      return res.status(401).json({
+        success: false,
+        message: "Bạn cần đăng nhập.",
+      });
+    }
+
+    const [rows] = await pool.execute(
+      `
+        SELECT
+          sa.id AS authorization_id,
+          sa.session_id,
+          sa.authorization_source,
+          sa.status AS authorization_status,
+          sa.authorized_at,
+          sa.expires_at AS authorization_expires_at,
+
+          s.name AS session_name,
+          s.status AS session_status,
+          s.starts_at,
+          s.expires_at AS session_expires_at
+
+        FROM session_authorizations sa
+
+        INNER JOIN tour_sessions s
+          ON s.id = sa.session_id
+
+        WHERE sa.user_id = ?
+          AND sa.status = 'active'
+          AND s.status = 'active'
+          AND (
+            sa.expires_at IS NULL
+            OR sa.expires_at > CURRENT_TIMESTAMP
+          )
+          AND (
+            s.starts_at IS NULL
+            OR s.starts_at <= CURRENT_TIMESTAMP
+          )
+          AND (
+            s.expires_at IS NULL
+            OR s.expires_at > CURRENT_TIMESTAMP
+          )
+
+        ORDER BY sa.authorized_at DESC
+      `,
+      [userId]
+    );
+
+    return res.json({
+      success: true,
+      authorizations: rows.map((row) => ({
+        authorizationId: Number(row.authorization_id),
+        sessionId: Number(row.session_id),
+        sessionName: row.session_name,
+        source: row.authorization_source,
+        status: row.authorization_status,
+        authorizedAt: row.authorized_at,
+        expiresAt: row.authorization_expires_at,
+        session: {
+          id: Number(row.session_id),
+          name: row.session_name,
+          status: row.session_status,
+          startsAt: row.starts_at,
+          expiresAt: row.session_expires_at,
+        },
+      })),
+    });
+  } catch (error) {
+    console.error(
+      "getMySessionAuthorizations error:",
       error
     );
 

@@ -248,19 +248,21 @@ function ScanQRScreen() {
       setPendingQrToken("");
 
       Alert.alert(
-        "Vào tour thành công",
-        session?.name
-          ? `Bạn đã được cấp quyền vào "${session.name}".`
-          : "Bạn đã được cấp quyền vào session.",
-        [
-          {
-            text: "Vào tour",
-            onPress: () => {
-              navigation.replace("ScanQR");
-            },
-          },
-        ]
-      );
+  "Vào tour thành công",
+  session?.name
+    ? `Bạn đã được cấp quyền vào "${session.name}".`
+    : "Bạn đã được cấp quyền vào session.",
+  [
+    {
+      text: "Xem các địa điểm",
+      onPress: () => {
+        navigation.replace("Home", {
+          tourAuthorized: true,
+        });
+      },
+    },
+  ]
+);
     } catch (error) {
       console.error(
         "QR AUTH ERROR:",

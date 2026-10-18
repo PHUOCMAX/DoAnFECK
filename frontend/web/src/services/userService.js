@@ -196,14 +196,18 @@ export function getCurrentUser() {
    POI
 ========================================================= */
 
+
 export function getPois() {
-  return request(
-    "/api/pois",
-    {
-      method: "GET",
-    }
-  );
+  const token = getUserToken();
+
+  return request("/api/pois", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
+
 
 export function createPoi(poi) {
   return request(
@@ -409,6 +413,22 @@ export function clearTourAuthorization() {
   );
 }
 
+export async function getMySessionAuthorizations() {
+  const token = getUserToken();
+
+  if (!token) {
+    throw new Error("Bạn chưa đăng nhập.");
+  }
+
+  return request("/api/sessions/my-authorizations", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+
 /* =========================================================
    QR AUTHORIZATION
 ========================================================= */
@@ -525,6 +545,23 @@ export function getTourPayment(
     }
   );
 }
+
+export function setDemoTourPaymentResult({
+  paymentId,
+  status,
+}) {
+  return request(
+    `/api/payments/${paymentId}/demo-result`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getUserToken()}`,
+      },
+      body: JSON.stringify({ status }),
+    }
+  );
+}
+
 
 /* =========================================================
    PENDING PAYMENT

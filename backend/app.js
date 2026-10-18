@@ -23,6 +23,7 @@ import {
   createQrCode,
   authorizeByQr,
   getSessionAuthorization,
+  getMySessionAuthorizations,
 } from "./controllers/sessionController.js";
 
 import { requireAuth } from "./middleware/authMiddleware.js";
@@ -432,6 +433,94 @@ async function getMyPayment(req, res, next) {
         sessionId: Number(payment.session_id),
         userId: Number(payment.user_id),
         amount: Number(payment.amount),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/* =========================================================
+   PAYMENT - USER DEMO RESULT
+   Chỉ áp dụng cho payment online provider=demo của user hiện tại.
+========================================================= */
+
+async function setDemoPaymentResult(req, res, next) {
+  try {
+    const paymentId = Number(req.params.paymentId);
+    const { status } = req.body ?? {};
+
+    if (!Number.isInteger(paymentId) || paymentId < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment ID không hợp lệ.",
+      });
+    }
+
+    if (!["paid", "failed"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Trạng thái demo chỉ được là paid hoặc failed.",
+      });
+    }
+
+    const [payments] = await pool.execute(
+      `
+        SELECT id, session_id, user_id, amount, currency, method, status, provider
+        FROM payments
+        WHERE id = ? AND user_id = ?
+        LIMIT 1
+      `,
+      [paymentId, req.auth.userId]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn thanh toán của bạn.",
+      });
+    }
+
+    const payment = payments[0];
+    if (payment.method !== "online" || payment.provider !== "demo") {
+      return res.status(403).json({
+        success: false,
+        message: "Chỉ hỗ trợ mô phỏng kết quả cho đơn online demo.",
+      });
+    }
+
+    if (payment.status !== "pending") {
+      return res.status(409).json({
+        success: false,
+        message: "Đơn thanh toán này không còn ở trạng thái chờ.",
+        payment: { id: Number(payment.id), status: payment.status },
+      });
+    }
+
+    await pool.execute(
+      `
+        UPDATE payments
+        SET status = ?,
+            paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE NULL END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ? AND status = 'pending'
+      `,
+      [status, status, paymentId, req.auth.userId]
+    );
+
+    return res.json({
+      success: true,
+      message: status === "paid"
+        ? "Mô phỏng thanh toán thành công."
+        : "Mô phỏng thanh toán thất bại.",
+      payment: {
+        id: Number(payment.id),
+        sessionId: Number(payment.session_id),
+        userId: Number(payment.user_id),
+        amount: Number(payment.amount),
+        currency: payment.currency,
+        method: payment.method,
+        status,
       },
     });
   } catch (error) {
@@ -864,7 +953,12 @@ export function createApp() {
     requirePaidSession,
     authorizeByQr
   );
-
+// User lấy danh sách session đã được cấp quyền
+app.get(
+  "/api/sessions/my-authorizations",
+  requireAuth,
+  getMySessionAuthorizations
+);
   // User kiểm tra quyền của mình
   app.get(
     "/api/sessions/:sessionId/authorization",
@@ -888,6 +982,13 @@ export function createApp() {
     "/api/payments/:sessionId",
     requireAuth,
     getMyPayment
+  );
+
+  // User mô phỏng kết quả cho đơn online demo của chính mình.
+  app.post(
+    "/api/payments/:paymentId/demo-result",
+    requireAuth,
+    setDemoPaymentResult
   );
 
   // Admin xác nhận payment

@@ -151,15 +151,17 @@ export function registerWithApi(
    POI
 ========================= */
 
-export function getPoisFromApi() {
+export function getPoisFromApi(token: string) {
   return request<PoisResponse>(
     "/api/pois",
     {
       method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     }
   );
 }
-
 export function createPoiWithApi(
   poi: CreatePoiRequest,
   token: string
