@@ -23,6 +23,7 @@ import {
   setDemoTourPaymentResult,
 } from "../../services/userService";
 
+
 export default function UserPayment() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -128,11 +129,40 @@ export default function UserPayment() {
       });
 
       const nextPayment = result?.payment || null;
-      setPayment(nextPayment);
 
-      if (nextPayment?.status === "paid") {
-        await authorizeAfterPaid();
-      }
+if (paymentMethod === "online") {
+  const paymentUrl = result?.paymentUrl;
+
+  if (!paymentUrl) {
+    throw new Error(
+      "Backend chưa trả về paymentUrl của VNPAY."
+    );
+  }
+
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(paymentUrl);
+  } catch {
+    throw new Error("URL thanh toán VNPAY không hợp lệ.");
+  }
+
+  if (
+    parsedUrl.protocol !== "https:" ||
+    parsedUrl.hostname !== "sandbox.vnpayment.vn"
+  ) {
+    throw new Error("URL thanh toán không thuộc VNPAY Sandbox.");
+  }
+
+  window.location.assign(parsedUrl.href);
+  return;
+}
+
+setPayment(nextPayment);
+
+if (nextPayment?.status === "paid") {
+  await authorizeAfterPaid();
+}
     } catch (err) {
       setError(err?.message || "Không thể tạo yêu cầu thanh toán.");
     } finally {
@@ -312,8 +342,9 @@ export default function UserPayment() {
           </div>
 
           {paymentMethod === "online" &&
-            payment &&
-            ["pending", "failed"].includes(payment.status) && (
+  payment &&
+  payment.provider !== "vnpay" &&
+  ["pending", "failed"].includes(payment.status) && (
               <div className="mt-6 rounded-2xl border border-[#dfeaf4] p-5">
                 <div className="flex flex-col items-center">
                   <QRCodeSVG
@@ -340,8 +371,9 @@ export default function UserPayment() {
                   )}
                 </div>
 
-                {payment.status === "pending" && (
-                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {payment.status === "pending" &&
+  payment.provider !== "vnpay" && (
+  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <button
                       type="button"
                       disabled={resultLoading}

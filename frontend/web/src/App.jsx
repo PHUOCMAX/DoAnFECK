@@ -24,6 +24,7 @@ import UserProfile from "./pages/user/UserProfile";
 import AddPoi from "./pages/user/AddPoi";
 import UserScanQR from "./pages/user/UserScanQR";
 import UserPayment from "./pages/user/UserPayment";
+import PaymentResult from "./pages/user/PaymentResult";
 
 import WebGeofenceEngine from "./components/user/WebGeofenceEngine";
 
@@ -226,6 +227,14 @@ function App() {
               </RequireUser>
             }
           />
+          <Route
+  path="/payment/result"
+  element={
+    <RequireUser>
+      <PaymentResult />
+    </RequireUser>
+  }
+/>
 
           {/* =================================================
              ADMIN

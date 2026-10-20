@@ -4,8 +4,17 @@ import { usePoiStore } from "../../stores/PoiProvider";
 import {
   createCheckin,
   getMyCheckins,
+  getTourAuthorization,
   getUserToken,
 } from "../../services/userService";
+
+/*
+ * Giống mobile: chỉ chạy GPS / check-in / thuyết minh
+ * khi đã đăng nhập VÀ đã được cấp quyền tour.
+ */
+function canRunGeofence() {
+  return Boolean(getUserToken() && getTourAuthorization());
+}
 
 import { useLanguage } from "../../i18n";
 
@@ -83,7 +92,7 @@ export default function WebGeofenceEngine() {
   const [
     geofenceEnabled,
     setGeofenceEnabled,
-  ] = useState(Boolean(getUserToken()));
+  ] = useState(canRunGeofence);
 
   const poisRef = useRef(pois);
 
@@ -160,12 +169,12 @@ export default function WebGeofenceEngine() {
    * ==========================================
    *
    * WebGeofenceEngine đang nằm ngoài Routes,
-   * nên phải tự bật/tắt theo session.
+   * nên phải tự bật/tắt theo session và quyền tour.
    */
   useEffect(() => {
     function syncSession() {
       setGeofenceEnabled(
-        Boolean(getUserToken())
+        canRunGeofence()
       );
     }
 
@@ -176,9 +185,19 @@ export default function WebGeofenceEngine() {
       syncSession
     );
 
+    window.addEventListener(
+      "tour-authorization-changed",
+      syncSession
+    );
+
     return () => {
       window.removeEventListener(
         "user-session-changed",
+        syncSession
+      );
+
+      window.removeEventListener(
+        "tour-authorization-changed",
         syncSession
       );
     };

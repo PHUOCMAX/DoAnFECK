@@ -1,4 +1,50 @@
 services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: multilingual-tour-guide-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DB_NAME: multilingual_tour_guide
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      VNP_ENABLED: ${VNP_ENABLED:-false}
+      VNP_TMN_CODE: ${VNP_TMN_CODE:-}
+      VNP_HASH_SECRET: ${VNP_HASH_SECRET:-}
+      VNP_RETURN_URL: ${VNP_RETURN_URL:-}
+      VNP_IPN_URL: ${VNP_IPN_URL:-}
+      VNP_FRONTEND_RETURN_URL: ${VNP_FRONTEND_RETURN_URL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      LIBRETRANSLATE_URL: http://libretranslate:5000
+    ports:
+      - "5001:5001"
+    depends_on:
+      - mysql
+      - qdrant
+      - libretranslate
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/web/Dockerfile
+      args:
+        VITE_MAPTILER_KEY: ${VITE_MAPTILER_KEY}
+    container_name: multilingual-tour-guide-frontend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+
   libretranslate:
     image: libretranslate/libretranslate:latest
     container_name: libretranslate
