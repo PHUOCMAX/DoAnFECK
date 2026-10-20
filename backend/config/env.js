@@ -1,6 +1,16 @@
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({
+  path: [
+    path.resolve(__dirname, "../.env"),
+    path.resolve(__dirname, "../../.env"),
+  ],
+});
 
 function parsePort(value) {
   if (value === undefined || value === "") {
@@ -41,10 +51,21 @@ export const env = {
     name: process.env.DB_NAME,
   },
   jwtSecret: process.env.JWT_SECRET,
+  
   corsOrigins: (process.env.CORS_ORIGIN ?? "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
+
+  vnpay: {
+    tmnCode: process.env.VNP_TMN_CODE,
+    secureSecret: process.env.VNP_HASH_SECRET,
+    returnUrl: process.env.VNP_RETURN_URL,
+    ipnUrl: process.env.VNP_IPN_URL,
+    frontendReturnUrl: process.env.VNP_FRONTEND_RETURN_URL,
+    enabled: process.env.VNP_ENABLED === "true",
+  },
+
 };
 
 export function validateEnvironment() {
@@ -63,7 +84,23 @@ export function validateEnvironment() {
   if (env.nodeEnv === "production" && env.corsOrigins.length === 0) {
     missing.push("CORS_ORIGIN");
   }
+    if (env.vnpay.enabled) {
+    const requiredVnpay = [
+      ["VNP_TMN_CODE", env.vnpay.tmnCode],
+      ["VNP_HASH_SECRET", env.vnpay.secureSecret],
+      ["VNP_RETURN_URL", env.vnpay.returnUrl],
+      ["VNP_IPN_URL", env.vnpay.ipnUrl],
+      ["VNP_FRONTEND_RETURN_URL", env.vnpay.frontendReturnUrl],
+    ];
 
+    const missingVnpay = requiredVnpay
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+
+    if (missingVnpay.length > 0) {
+      missing.push(...missingVnpay);
+    }
+  }
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(", ")}`

@@ -1,6 +1,15 @@
 import cors from "cors";
 import express from "express";
 import path from "path";
+import { VNPay } from "vnpay";
+import {
+  IpnSuccess,
+  IpnOrderNotFound,
+  InpOrderAlreadyConfirmed,
+  IpnInvalidAmount,
+  IpnFailChecksum,
+  IpnUnknownError,
+} from "vnpay";
 
 import agentRoutes from "./routes/agentRoutes.js";
 
@@ -32,6 +41,50 @@ import { requireAdmin } from "./middleware/adminMiddleware.js";
 /* =========================================================
    HELPERS
 ========================================================= */
+function createVnpayClient() {
+  if (!env.vnpay.enabled) {
+    throw new Error("VNPAY integration is disabled.");
+  }
+
+  const {
+    tmnCode,
+    secureSecret,
+  } = env.vnpay;
+
+  if (!tmnCode || !secureSecret) {
+    throw new Error("VNPAY credentials are not configured.");
+  }
+
+  return new VNPay({
+    vnpayHost: "https://sandbox.vnpayment.vn",
+    tmnCode,
+    secureSecret,
+    testMode: true,
+    hashAlgorithm: "SHA512",
+    endpoints: {
+      paymentEndpoint: "paymentv2/vpcpay.html",
+    },
+  });
+}
+// Chỉ cho redirect về deep link của app (Expo Go hoặc bản build),
+// tránh biến Return URL thành open redirect.
+const APP_RETURN_URL_PATTERN = /^(exps?|multilingualtour):\/\/[^\s]{1,300}$/;
+
+function isAllowedAppReturnUrl(value) {
+  return (
+    typeof value === "string" &&
+    APP_RETURN_URL_PATTERN.test(value)
+  );
+}
+
+function decodeAppReturnUrl(encoded) {
+  try {
+    const value = Buffer.from(String(encoded ?? ""), "base64url").toString("utf8");
+    return isAllowedAppReturnUrl(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 function corsOptions() {
   return {
@@ -180,6 +233,7 @@ async function createPayment(req, res, next) {
       sessionId,
       method,
       note = null,
+      appReturnUrl = null,
     } = req.body ?? {};
 
     const normalizedSessionId = Number(sessionId);
@@ -282,15 +336,24 @@ async function createPayment(req, res, next) {
       });
     }
 
-    /*
-     * Online hiện là payment foundation/demo.
-     * Chưa kết nối VNPay/MoMo/ZaloPay.
-     */
-    const provider =
-      method === "online" ? "demo" : "offline";
+        if (method === "online" && !env.vnpay.enabled) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "Thanh toán VNPAY chưa được bật. Vui lòng thử lại sau.",
+      });
+    }
 
+        const provider =
+      method === "online" ? "vnpay" : "offline";
+
+    // Mã giao dịch VNPAY cần duy nhất trong ngày.
     const transactionCode =
-      `${method.toUpperCase()}-${Date.now()}-${req.auth.userId}`;
+      method === "online"
+        ? `VNP${Date.now()}${Math.floor(Math.random() * 1000000)
+            .toString()
+            .padStart(6, "0")}`
+        : `OFFLINE-${Date.now()}-${req.auth.userId}`;
 
     const [result] = await pool.execute(
       `
@@ -318,6 +381,31 @@ async function createPayment(req, res, next) {
       ]
     );
 
+    let paymentUrl = null;
+
+    if (method === "online") {
+      const vnpay = createVnpayClient();
+
+      const remoteIp = req.socket.remoteAddress || "";
+const clientIp = remoteIp.startsWith("::ffff:")
+  ? remoteIp.slice(7)
+  : remoteIp;
+
+      paymentUrl = vnpay.buildPaymentUrl({
+        vnp_Amount: amount,
+        vnp_OrderInfo: `Thanh toan tour ${normalizedSessionId}`,
+        vnp_TxnRef: transactionCode,
+        vnp_IpAddr: clientIp,
+        // Mobile gửi kèm deep link của app: gắn vào path (không phải query)
+        // để VNPAY trả về không làm sai chữ ký.
+        vnp_ReturnUrl: isAllowedAppReturnUrl(appReturnUrl)
+          ? `${env.vnpay.returnUrl.replace(/\/+$/, "")}/app/${Buffer.from(
+              appReturnUrl
+            ).toString("base64url")}`
+          : env.vnpay.returnUrl,
+      });
+    }
+
     const [rows] = await pool.execute(
       `
         SELECT
@@ -344,7 +432,7 @@ async function createPayment(req, res, next) {
       success: true,
       message:
         method === "online"
-          ? "Tạo yêu cầu thanh toán online thành công."
+          ? "Tạo yêu cầu thanh toán VNPAY thành công."
           : "Tạo yêu cầu thanh toán offline thành công.",
       payment: {
         ...rows[0],
@@ -353,13 +441,12 @@ async function createPayment(req, res, next) {
         userId: Number(rows[0].user_id),
         amount: Number(rows[0].amount),
       },
+      paymentUrl,
       paymentProvider:
         method === "online"
           ? {
-              type: "demo",
-              integrated: false,
-              message:
-                "Online payment hiện đang ở chế độ demo. Chưa kết nối cổng thanh toán thực tế.",
+              type: "vnpay",
+              integrated: true,
             }
           : null,
     });
@@ -573,7 +660,13 @@ async function confirmPayment(req, res, next) {
     }
 
     const payment = payments[0];
-
+        if (payment.method === "online") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Không thể xác nhận thủ công payment online. Giao dịch phải được xác minh qua cổng thanh toán.",
+      });
+    }
     if (payment.status === "paid") {
       return res.json({
         success: true,
@@ -828,6 +921,7 @@ async function getMonitoringStats(req, res, next) {
 
 export function createApp() {
   const app = express();
+  app.set("trust proxy", "172.18.0.6");
 
   app.disable("x-powered-by");
 
@@ -969,7 +1063,223 @@ app.get(
   // =========================
   // PAYMENT
   // =========================
+  // VNPAY IPN: xác minh giao dịch từ máy chủ VNPAY.
+  // VNPAY Return: xác minh chữ ký, cập nhật payment còn pending
+  // (sandbox thường không gọi IPN), rồi chuyển về frontend.
+  // Điều kiện status = 'pending' giúp IPN và Return không ghi đè nhau.
 
+  // /return/app/:target: giao dịch tạo từ mobile, redirect về deep link của app.
+  app.get(
+    ["/api/payments/vnpay/return", "/api/payments/vnpay/return/app/:target"],
+    async (req, res) => {
+    const appReturnUrl = req.params.target
+      ? decodeAppReturnUrl(req.params.target)
+      : null;
+    const resultUrl = new URL(appReturnUrl || env.vnpay.frontendReturnUrl);
+
+    if (!env.vnpay.enabled) {
+      resultUrl.searchParams.set("status", "unavailable");
+      return res.redirect(resultUrl.toString());
+    }
+
+    try {
+      const vnpay = createVnpayClient();
+      const verified = vnpay.verifyReturnUrl(req.query);
+
+      if (!verified.isVerified) {
+        resultUrl.searchParams.set("status", "invalid");
+        return res.redirect(resultUrl.toString());
+      }
+
+      const transactionCode = String(verified.vnp_TxnRef ?? "");
+
+      const [payments] = await pool.execute(
+        `SELECT id, session_id, amount, method, status, provider
+         FROM payments
+         WHERE transaction_code = ?
+         LIMIT 1`,
+        [transactionCode]
+      );
+
+      if (
+        payments.length === 0 ||
+        payments[0].method !== "online" ||
+        payments[0].provider !== "vnpay"
+      ) {
+        resultUrl.searchParams.set("status", "not_found");
+        return res.redirect(resultUrl.toString());
+      }
+
+      const isSuccess =
+  verified.isSuccess &&
+  String(verified.vnp_ResponseCode) === "00" &&
+  String(verified.vnp_TransactionStatus) === "00";
+
+      const payment = payments[0];
+      const amountMatches =
+        Math.round(Number(payment.amount)) ===
+        Math.round(Number(verified.vnp_Amount));
+
+      if (payment.status === "pending") {
+        if (isSuccess && amountMatches) {
+          await pool.execute(
+            `UPDATE payments
+             SET status = 'paid',
+                 paid_at = CURRENT_TIMESTAMP,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status = 'pending'`,
+            [payment.id]
+          );
+        } else if (!isSuccess) {
+          await pool.execute(
+            `UPDATE payments
+             SET status = 'failed',
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status = 'pending'`,
+            [payment.id]
+          );
+        }
+      }
+
+      resultUrl.searchParams.set(
+        "status",
+        isSuccess && amountMatches ? "success" : "failed"
+      );
+      resultUrl.searchParams.set(
+        "sessionId",
+        String(payments[0].session_id)
+      );
+
+      return res.redirect(resultUrl.toString());
+    } catch (error) {
+      console.error("VNPAY Return verification failed:", error.message);
+      resultUrl.searchParams.set("status", "error");
+      return res.redirect(resultUrl.toString());
+    }
+  }
+  );
+
+  app.get("/api/payments/vnpay/ipn", async (req, res) => {
+    if (!env.vnpay.enabled) {
+      return res.status(503).json({
+        RspCode: "99",
+        Message: "VNPAY integration is disabled",
+      });
+    }
+
+    try {
+      const vnpay = createVnpayClient();
+      console.error("[VNPAY IPN amount diagnostic]", {
+  amount: req.query.vnp_Amount,
+  amountType: typeof req.query.vnp_Amount,
+});
+      const verified = vnpay.verifyIpnCall(req.query);
+
+      if (!verified.isVerified) {
+        return res.json(IpnFailChecksum);
+      }
+
+      const transactionCode = String(verified.vnp_TxnRef ?? "");
+
+      if (!transactionCode) {
+        return res.json(IpnOrderNotFound);
+      }
+
+      const connection = await pool.getConnection();
+
+      try {
+        await connection.beginTransaction();
+
+        const [payments] = await connection.execute(
+          `
+            SELECT id, amount, method, status, provider
+            FROM payments
+            WHERE transaction_code = ?
+            LIMIT 1
+            FOR UPDATE
+          `,
+          [transactionCode]
+        );
+
+        if (payments.length === 0) {
+          await connection.rollback();
+          return res.json(IpnOrderNotFound);
+        }
+
+        const payment = payments[0];
+
+        if (
+          payment.method !== "online" ||
+          payment.provider !== "vnpay"
+        ) {
+          await connection.rollback();
+          return res.json(IpnOrderNotFound);
+        }
+
+        if (payment.status === "paid") {
+  await connection.rollback();
+  return res.json(InpOrderAlreadyConfirmed);
+}
+
+if (payment.status !== "pending") {
+  await connection.rollback();
+  return res.json(InpOrderAlreadyConfirmed);
+}
+
+        const paymentAmount = Math.round(Number(payment.amount));
+const vnpayAmount = Math.round(Number(verified.vnp_Amount));
+
+if (
+  !Number.isFinite(paymentAmount) ||
+  !Number.isFinite(vnpayAmount) ||
+  paymentAmount <= 0 ||
+  paymentAmount !== vnpayAmount
+) {
+  await connection.rollback();
+  return res.json(IpnInvalidAmount);
+}
+
+        if (
+  verified.isSuccess &&
+  String(verified.vnp_ResponseCode) === "00" &&
+  String(verified.vnp_TransactionStatus) === "00"
+) {
+          await connection.execute(
+            `
+              UPDATE payments
+              SET status = 'paid',
+                  paid_at = CURRENT_TIMESTAMP,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND status = 'pending'
+            `,
+            [payment.id]
+          );
+        } else {
+          await connection.execute(
+            `
+              UPDATE payments
+              SET status = 'failed',
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND status = 'pending'
+            `,
+            [payment.id]
+          );
+        }
+
+        await connection.commit();
+        return res.json(IpnSuccess);
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      console.error("VNPAY IPN processing failed:", error.message);
+
+      return res.status(500).json(IpnUnknownError);
+    }
+  });
   // User tạo payment
   app.post(
     "/api/payments",

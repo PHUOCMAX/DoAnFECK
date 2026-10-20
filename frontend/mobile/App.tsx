@@ -22,6 +22,9 @@ import {
   useCameraPermissions,
 } from "expo-camera";
 
+import * as ExpoLinking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
+
 import HomeScreen from "./src/screens/HomeScreen";
 import HistoryScreen from "./src/screens/HistoryScreen";
 import PoiDetailScreen from "./src/screens/PoiDetailScreen";
@@ -108,6 +111,23 @@ function ScanQRScreen() {
   const [pendingQrToken, setPendingQrToken] =
     useState("");
 
+  const [paymentUrl, setPaymentUrl] =
+    useState("");
+
+  // Deep link VNPAY redirect về sau khi thanh toán
+  // (Expo Go: exp://<ip>:8081/--/payment-result).
+  const appReturnUrl =
+    ExpoLinking.createURL("payment-result");
+
+  // Mở VNPAY trong phiên trình duyệt tự đóng khi redirect về app.
+  // Kết quả paid/failed do vòng kiểm tra payment bên dưới xử lý.
+  const openVnpay = async (url: string) => {
+    await WebBrowser.openAuthSessionAsync(
+      url,
+      appReturnUrl
+    );
+  };
+
   const API_URL = (
     process.env.EXPO_PUBLIC_API_URL ||
     "http://192.168.1.42:5001"
@@ -137,6 +157,7 @@ function ScanQRScreen() {
     setPaymentLoading(false);
     setPaymentError("");
     setPendingQrToken("");
+    setPaymentUrl("");
   };
 
   const authorizeSession = async (
@@ -315,6 +336,7 @@ function ScanQRScreen() {
             sessionId:
               paymentSession.id,
             method: paymentMethod,
+            appReturnUrl,
             note:
               paymentMethod === "online"
                 ? "Thanh toán online để vào tour"
@@ -346,6 +368,23 @@ function ScanQRScreen() {
           pendingQrToken
         );
         return;
+      }
+
+      // Online: mở trang VNPAY. Sau khi trả tiền, backend cập nhật
+      // payment = paid và vòng kiểm tra bên dưới tự cấp quyền vào tour.
+      if (paymentMethod === "online") {
+        const url = String(data?.paymentUrl || "");
+
+        if (
+          !url.startsWith("https://sandbox.vnpayment.vn/")
+        ) {
+          throw new Error(
+            "Backend chưa trả về URL thanh toán VNPAY hợp lệ."
+          );
+        }
+
+        setPaymentUrl(url);
+        await openVnpay(url);
       }
     } catch (error) {
       setPaymentError(
@@ -838,6 +877,44 @@ if (
               Thanh toán đã hoàn tất.
               Đang cấp quyền vào tour...
             </Text>
+          ) : isPending &&
+            payment?.method === "online" ? (
+            <>
+              <Text
+                style={
+                  styles.paymentStatusPending
+                }
+              >
+                Đang chờ xác nhận thanh toán
+                VNPAY...
+              </Text>
+
+              <Pressable
+                style={
+                  styles.paymentButton
+                }
+                onPress={() => {
+                  if (paymentUrl) {
+                    void openVnpay(paymentUrl);
+                  } else {
+                    void createPayment();
+                  }
+                }}
+                disabled={
+                  paymentLoading
+                }
+              >
+                <Text
+                  style={
+                    styles.paymentButtonText
+                  }
+                >
+                  {paymentUrl
+                    ? "Mở lại trang VNPAY"
+                    : "Thanh toán lại với VNPAY"}
+                </Text>
+              </Pressable>
+            </>
           ) : isPending ? (
             <Text
               style={
@@ -889,7 +966,7 @@ if (
             }
           >
             {paymentMethod === "online"
-              ? "Thanh toán online hiện đang ở chế độ demo, chưa kết nối cổng Payoo thật. Sau khi payment được xác nhận là paid, ứng dụng sẽ tự động cấp quyền vào tour."
+              ? "Thanh toán qua VNPAY (sandbox). Thanh toán xong sẽ tự quay về ứng dụng và được cấp quyền vào tour."
               : "Thanh toán tiền mặt được ghi nhận là pending. Sau khi Admin xác nhận đã thu tiền, ứng dụng sẽ tự động cấp quyền vào tour."}
           </Text>
 
