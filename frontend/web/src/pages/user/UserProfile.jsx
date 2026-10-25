@@ -1,38 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   UserRound,
-  LogOut,
   PlusCircle,
   MapPin,
   Clock3,
   ChevronRight,
   History,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import UserLayout from "../../components/user/UserLayout";
 import {
-  clearUserSession,
+  getDeviceId,
   getMyCheckins,
-  getStoredUser,
   resolveAssetUrl,
 } from "../../services/userService";
 import { useLanguage } from "../../i18n";
 
 export default function UserProfile() {
   const { t, language } = useLanguage();
-  const navigate = useNavigate();
-
-  const user = getStoredUser();
+  // Du khách không có tài khoản: hiển thị mã thiết bị rút gọn.
+  const deviceCode = getDeviceId().slice(0, 8).toUpperCase();
 
   const [checkins, setCheckins] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState("");
-
-  function logout() {
-    clearUserSession();
-    navigate("/login", { replace: true });
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +117,7 @@ export default function UserProfile() {
                 </h1>
 
                 <p className="mt-1 truncate text-sm text-[#777]">
-                  {user?.email || ""}
+                  {language === "vi" ? "Thiết bị" : "Device"}: {deviceCode}
                 </p>
               </div>
             </div>
@@ -141,28 +133,6 @@ export default function UserProfile() {
             </div>
           </div>
 
-          <div className="mt-7 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-[#f5f7fa] p-4">
-              <p className="text-xs text-[#999]">
-                Name
-              </p>
-
-              <p className="mt-1 font-extrabold">
-                {user?.name || t.user}
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#f5f7fa] p-4">
-              <p className="text-xs text-[#999]">
-                {t.role}
-              </p>
-
-              <p className="mt-1 font-extrabold">
-                {user?.role || "user"}
-              </p>
-            </div>
-          </div>
-
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               to="/add-poi"
@@ -172,13 +142,6 @@ export default function UserProfile() {
               {t.addPoi}
             </Link>
 
-            <button
-              onClick={logout}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#fff1f1] px-4 py-3 font-extrabold text-[#d33] transition hover:bg-[#ffe2e2]"
-            >
-              <LogOut size={17} />
-              {t.logout}
-            </button>
           </div>
         </div>
 

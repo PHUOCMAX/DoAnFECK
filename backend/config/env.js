@@ -57,6 +57,10 @@ export const env = {
     .map((origin) => origin.trim())
     .filter(Boolean),
 
+  // Mỗi lượt vào tour (một lần thanh toán / một lần quét tour miễn phí)
+  // được dùng trong bao nhiêu giờ.
+  tourAccessHours: Math.max(Number(process.env.TOUR_ACCESS_HOURS) || 2, 0.25),
+
   vnpay: {
     tmnCode: process.env.VNP_TMN_CODE,
     secureSecret: process.env.VNP_HASH_SECRET,

@@ -1,9 +1,13 @@
+import { deviceHeaders } from "./userService";
+
 const API_URL = (
   import.meta.env.VITE_API_URL || ""
 ).replace(/\/+$/, "");
 
+// Tham số đầu (token) giữ lại cho tương thích, không còn dùng:
+// du khách được nhận diện bằng mã thiết bị.
 export async function chatWithAgent(
-  token,
+  _token,
   question,
   language = "vi"
 ) {
@@ -15,7 +19,7 @@ export async function chatWithAgent(
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...deviceHeaders(),
       },
 
       body: JSON.stringify({

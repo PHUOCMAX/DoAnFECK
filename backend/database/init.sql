@@ -273,3 +273,70 @@ CREATE TABLE `payments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Updated schema: includes session, QR authorization, and payment tables.
+
+-- ======================================================
+-- Migration 005: users.last_seen_at
+-- ======================================================
+-- Thời điểm người dùng gọi API gần nhất (dùng cho "Đang online" trên dashboard admin).
+ALTER TABLE `users`
+  ADD COLUMN `last_seen_at` timestamp NULL DEFAULT NULL AFTER `created_at`,
+  ADD KEY `idx_users_last_seen_at` (`last_seen_at`);
+
+-- ======================================================
+-- Migration 006: du khách không cần đăng nhập (mã thiết bị)
+-- ======================================================
+-- Du khách không cần đăng nhập: nhận diện theo mã thiết bị (UUID do client tự tạo).
+-- user_id được giữ lại (nullable) cho dữ liệu cũ và app mobile còn dùng tài khoản.
+
+ALTER TABLE `session_authorizations`
+  MODIFY `user_id` int NULL,
+  ADD COLUMN `device_id` char(36) NULL AFTER `user_id`,
+  ADD UNIQUE KEY `uq_session_device` (`session_id`, `device_id`);
+
+ALTER TABLE `payments`
+  MODIFY `user_id` int NULL,
+  ADD COLUMN `device_id` char(36) NULL AFTER `user_id`,
+  ADD KEY `idx_payments_device_id` (`device_id`);
+
+ALTER TABLE `checkins`
+  MODIFY `user_id` int NULL,
+  ADD COLUMN `device_id` char(36) NULL AFTER `user_id`,
+  ADD KEY `idx_checkins_device_id` (`device_id`);
+
+-- POI do du khách gửi không còn tài khoản tạo.
+ALTER TABLE `pois`
+  MODIFY `created_by` int NULL,
+  ADD COLUMN `submitted_device_id` char(36) NULL AFTER `created_by`;
+
+-- Heartbeat: thiết bị nào đang ở trong tour nào, lần cuối lúc nào.
+CREATE TABLE IF NOT EXISTS `tour_presence` (
+  `session_id` bigint unsigned NOT NULL,
+  `device_id` char(36) NOT NULL,
+  `joined_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_seen_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`session_id`, `device_id`),
+  KEY `idx_tour_presence_last_seen_at` (`last_seen_at`),
+  CONSTRAINT `fk_tour_presence_session` FOREIGN KEY (`session_id`) REFERENCES `tour_sessions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ======================================================
+-- Migration 007: tour mặc định
+-- ======================================================
+-- Đánh dấu tour mặc định (QR dùng chung dán cố định tại điểm tham quan).
+-- Admin đổi tour mặc định trong trang "Tour và QR".
+ALTER TABLE `tour_sessions`
+  ADD COLUMN `is_default` tinyint(1) NOT NULL DEFAULT 0 AFTER `status`;
+
+-- ======================================================
+-- Migration 008: xoá cột không dùng
+-- ======================================================
+-- Cột không còn dùng (đã rà soát code backend, web, mobile):
+-- - tour_sessions.session_token: chỉ được sinh lúc tạo tour, không nơi nào đọc;
+--   QR dùng qr_codes.qr_token.
+-- - pois.district: không có chức năng ghi, toàn bộ dữ liệu trống.
+ALTER TABLE `tour_sessions`
+  DROP INDEX `uq_tour_sessions_token`,
+  DROP COLUMN `session_token`;
+
+ALTER TABLE `pois`
+  DROP COLUMN `district`;

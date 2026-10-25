@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  authorizeSessionByQr,
+  claimDeviceTransfer,
   clearPendingTourPayment,
-  getPendingTourPayment,
+  getDeviceId,
+  getMySessionAuthorizations,
   getTourPayment,
   saveTourAuthorization,
 } from "../../services/userService";
@@ -27,6 +28,14 @@ export default function PaymentResult() {
     async function loadPayment() {
       const sessionId = searchParams.get("sessionId");
 
+      // Lần đầu: nếu ngân hàng đưa về trình duyệt khác, nhận lại mã thiết bị đã trả tiền.
+      const transferToken = searchParams.get("device");
+
+      if (attempts === 0 && transferToken) {
+        await claimDeviceTransfer(transferToken);
+        if (!active) return;
+      }
+
       if (!sessionId || !Number.isInteger(Number(sessionId))) {
         if (active) {
           setError("Mã phiên tham quan không hợp lệ hoặc bị thiếu.");
@@ -44,24 +53,25 @@ export default function PaymentResult() {
         setError("");
 
         if (currentPayment?.status === "paid") {
-          // Đã thanh toán: dùng lại qrToken đã lưu lúc quét QR để cấp quyền tour.
-          const pending = getPendingTourPayment();
+          // Backend đã tự cấp quyền khi thanh toán thành công:
+          // chỉ cần đồng bộ quyền về trình duyệt, không cần quét lại QR.
+          const data = await getMySessionAuthorizations();
+          if (!active) return;
 
-          if (pending?.qrToken) {
-            const auth = await authorizeSessionByQr(pending.qrToken);
-            if (!active) return;
+          const access = (data?.authorizations || []).find(
+            (item) => Number(item.sessionId) === Number(sessionId)
+          );
 
-            if (auth.ok && auth.data?.authorization?.status === "active") {
-              saveTourAuthorization(auth.data.authorization, auth.data.session);
-              clearPendingTourPayment();
-              setAuthorized(true);
-              timer = setTimeout(() => navigate("/", { replace: true }), 1500);
-            } else {
-              setError(
-                auth.data?.message ||
-                  "Đã thanh toán nhưng chưa cấp được quyền vào tour."
-              );
-            }
+          if (access) {
+            saveTourAuthorization(
+              { ...access, deviceId: getDeviceId(), status: "active" },
+              access.session
+            );
+            clearPendingTourPayment();
+            setAuthorized(true);
+            timer = setTimeout(() => navigate("/", { replace: true }), 1500);
+          } else {
+            setError("Đã thanh toán nhưng chưa cấp được quyền vào tour. Hãy quét lại mã QR.");
           }
 
           setLoading(false);

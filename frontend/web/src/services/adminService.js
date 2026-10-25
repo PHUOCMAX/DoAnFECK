@@ -139,3 +139,34 @@ export function deleteAdminUser(token, userId) {
     },
   });
 }
+export function createAdminUser(token, { name, email, password }) {
+  return request("/api/admin/users", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name, email, password }),
+  });
+}
+
+export function getAdminDevices(token, query = "") {
+  return request(
+    `/api/admin/devices${query ? `?q=${encodeURIComponent(query)}` : ""}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export function grantDeviceAccess(token, deviceId, sessionId) {
+  return request(`/api/admin/devices/${deviceId}/grant`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ sessionId }),
+  });
+}

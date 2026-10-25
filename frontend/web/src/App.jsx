@@ -13,8 +13,6 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 
-import UserLogin from "./pages/user/UserLogin";
-import UserRegister from "./pages/user/UserRegister";
 import UserHome from "./pages/user/UserHome";
 import UserExplore from "./pages/user/UserExplore";
 import PoiDetail from "./pages/user/PoiDetail";
@@ -27,11 +25,12 @@ import UserPayment from "./pages/user/UserPayment";
 import PaymentResult from "./pages/user/PaymentResult";
 
 import WebGeofenceEngine from "./components/user/WebGeofenceEngine";
+import TourHeartbeat from "./components/user/TourHeartbeat";
 
 import {
   getTourAuthorization,
   getMySessionAuthorizations,
-  getUserToken,
+  getDeviceId,
   saveTourAuthorization,
 } from "./services/userService";
 
@@ -39,36 +38,12 @@ import { PoiProvider } from "./stores/PoiProvider";
 
 /* =====================================================
    REQUIRE USER
+   Du khách không cần đăng nhập: được nhận diện bằng mã thiết bị
+   (services/userService.js → getDeviceId). Giữ wrapper để các route
+   không phải đổi; chỉ còn admin là đăng nhập.
 ===================================================== */
 
 function RequireUser({ children }) {
-  const location = useLocation();
-
-  const token = getUserToken();
-
-  if (!token) {
-    /*
-     * Giữ cả pathname + query string.
-     *
-     * Ví dụ:
-     * /scan-qr?qrToken=ABC123
-     *
-     * Sau khi login xong UserLogin sẽ quay lại
-     * đúng URL này.
-     */
-    const from = `${location.pathname}${location.search}`;
-
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{
-          from,
-        }}
-      />
-    );
-  }
-
   return children;
 }
 
@@ -86,17 +61,6 @@ function RequireTour({ children }) {
     let cancelled = false;
 
     async function checkAuthorization() {
-      const token = getUserToken();
-
-      if (!token) {
-        if (!cancelled) {
-          setAuthorized(false);
-          setChecking(false);
-        }
-        return;
-      }
-
-
       try {
         const data = await getMySessionAuthorizations();
 
@@ -118,14 +82,10 @@ function RequireTour({ children }) {
         if (cancelled) return;
 
         if (activeAuthorization) {
-          const user = JSON.parse(
-            localStorage.getItem("user_user") || "null"
-          );
-
           saveTourAuthorization(
             {
               ...activeAuthorization,
-              userId: Number(user?.id),
+              deviceId: getDeviceId(),
               status: "active",
               sessionId: Number(activeAuthorization.sessionId),
             },
@@ -190,20 +150,22 @@ function App() {
     <BrowserRouter>
       <PoiProvider>
         <WebGeofenceEngine />
+        <TourHeartbeat />
 
         <Routes>
           {/* =================================================
              USER AUTH
           ================================================= */}
 
+          {/* Du khách không đăng nhập nữa: link cũ chuyển về trang chủ */}
           <Route
             path="/login"
-            element={<UserLogin />}
+            element={<Navigate to="/" replace />}
           />
 
           <Route
             path="/register"
-            element={<UserRegister />}
+            element={<Navigate to="/" replace />}
           />
 
           {/* =================================================

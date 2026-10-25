@@ -4,12 +4,13 @@ import {
   createCheckin,
   listMyCheckins,
 } from "../controllers/checkinController.js";
-import { requireAuth } from "../middleware/authMiddleware.js";
+import { requireVisitor } from "../middleware/visitorMiddleware.js";
+import { requireTourAuthorization } from "../middleware/requireTourAuthorization.js";
 
 const router = express.Router();
 
-router.use(requireAuth);
-router.post("/", createCheckin);
+router.use(requireVisitor);
+router.post("/", requireTourAuthorization, createCheckin);
 router.get("/", listMyCheckins);
 
 export default router;

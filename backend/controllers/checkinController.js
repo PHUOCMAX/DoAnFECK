@@ -1,4 +1,8 @@
 import pool from "../config/db.js";
+import {
+  visitorColumns,
+  visitorCondition,
+} from "../middleware/visitorMiddleware.js";
 
 export async function createCheckin(req, res, next) {
   const poiId = Number(req.body?.poiId);
@@ -36,24 +40,23 @@ export async function createCheckin(req, res, next) {
     }
 
     /*
-     * Bảng checkins hiện tại chỉ có:
-     * id
-     * user_id
-     * poi_id
-     * checked_in_at
-     *
+     * Ghi theo thiết bị (du khách) hoặc tài khoản (app mobile cũ).
      * Không lưu latitude / longitude.
      */
+    const owner = visitorColumns(req);
+
     const [result] = await pool.execute(
       `
         INSERT INTO checkins (
           user_id,
+          device_id,
           poi_id
         )
-        VALUES (?, ?)
+        VALUES (?, ?, ?)
       `,
       [
-        req.auth.userId,
+        owner.userId,
+        owner.deviceId,
         poiId,
       ]
     );
@@ -97,6 +100,8 @@ export async function listMyCheckins(req, res, next) {
   );
 
   try {
+    const who = visitorCondition(req, "c.");
+
     const [rows] = await pool.execute(
       `
         SELECT
@@ -113,11 +118,11 @@ export async function listMyCheckins(req, res, next) {
         FROM checkins c
         JOIN pois p
           ON p.id = c.poi_id
-        WHERE c.user_id = ?
+        WHERE ${who.sql}
         ORDER BY c.checked_in_at DESC
         LIMIT ${limit}
       `,
-      [req.auth.userId]
+      who.params
     );
 
     return res.json({

@@ -1,16 +1,21 @@
 
 import pool from "../config/db.js";
+import { visitorCondition } from "./visitorMiddleware.js";
 
+/*
+ * Chạy sau requireVisitor: du khách (thiết bị hoặc tài khoản)
+ * phải có quyền tour còn hiệu lực.
+ */
 export async function requireTourAuthorization(req, res, next) {
   try {
-    const userId = Number(req.auth?.userId);
-
-    if (!Number.isInteger(userId) || userId < 1) {
+    if (!req.visitor) {
       return res.status(401).json({
         success: false,
-        message: "Bạn cần đăng nhập.",
+        message: "Thiếu mã thiết bị. Hãy tải lại trang.",
       });
     }
+
+    const who = visitorCondition(req, "sa.");
 
     const [rows] = await pool.execute(
       `
@@ -18,7 +23,7 @@ export async function requireTourAuthorization(req, res, next) {
         FROM session_authorizations sa
         INNER JOIN tour_sessions s
           ON s.id = sa.session_id
-        WHERE sa.user_id = ?
+        WHERE ${who.sql}
           AND sa.status = 'active'
           AND s.status = 'active'
           AND (
@@ -35,7 +40,7 @@ export async function requireTourAuthorization(req, res, next) {
           )
         LIMIT 1
       `,
-      [userId]
+      who.params
     );
 
     if (rows.length === 0) {
@@ -45,10 +50,6 @@ export async function requireTourAuthorization(req, res, next) {
         authorizationRequired: true,
       });
     }
-    console.log("TOUR AUTHORIZATION CHECK:", {
-  userId,
-  authorizationCount: rows.length,
-});
 
     return next();
   } catch (error) {

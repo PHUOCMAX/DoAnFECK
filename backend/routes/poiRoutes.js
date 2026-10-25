@@ -2,11 +2,11 @@ import { requireTourAuthorization } from "../middleware/requireTourAuthorization
 import express from "express";
 
 import { createPoi, listPois } from "../controllers/poiController.js";
-import { requireAuth } from "../middleware/authMiddleware.js";
+import { requireVisitor } from "../middleware/visitorMiddleware.js";
 
 const router = express.Router();
 
-router.get("/", requireAuth, requireTourAuthorization, listPois);
-router.post("/", requireAuth, createPoi);
+router.get("/", requireVisitor, requireTourAuthorization, listPois);
+router.post("/", requireVisitor, createPoi);
 
 export default router;

@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { visitorColumns } from "../middleware/visitorMiddleware.js";
 import {
   SUPPORTED_LANGUAGES,
   validatePoiPayload,
@@ -76,7 +77,6 @@ const POI_COLUMNS = `
   description_en,
   description_zh,
   city,
-  district,
   category,
   latitude,
   longitude,
@@ -171,7 +171,7 @@ export async function listPois(req, res, next) {
 
 export async function createPoi(req, res, next) {
   console.log("========== CREATE POI ==========");
-  console.log("USER:", req.auth?.userId);
+  console.log("VISITOR:", req.visitor);
   console.log(
     "BODY:",
     JSON.stringify(req.body, null, 2)
@@ -192,6 +192,26 @@ export async function createPoi(req, res, next) {
   }
 
   const poi = validation.value;
+
+  // Không cần tài khoản nên giới hạn số POI mỗi thiết bị gửi trong 24 giờ.
+  if (req.visitor?.deviceId) {
+    const [[recent]] = await pool.execute(
+      `
+        SELECT COUNT(*) AS total
+        FROM pois
+        WHERE submitted_device_id = ?
+          AND created_at >= NOW() - INTERVAL 1 DAY
+      `,
+      [req.visitor.deviceId]
+    );
+
+    if (Number(recent.total) >= 5) {
+      return res.status(429).json({
+        success: false,
+        message: "Bạn đã gửi 5 địa điểm trong 24 giờ qua. Vui lòng thử lại sau.",
+      });
+    }
+  }
 
   let connection;
 
@@ -275,7 +295,8 @@ export async function createPoi(req, res, next) {
         audio_en,
         audio_zh,
 
-        created_by
+        created_by,
+        submitted_device_id
       )
       VALUES (
         ?, ?, ?,
@@ -283,7 +304,7 @@ export async function createPoi(req, res, next) {
         ?, ?, ?, ?, ?,
         ?,
         ?, ?, ?,
-        ?
+        ?, ?
       )
       `,
       [
@@ -307,7 +328,9 @@ export async function createPoi(req, res, next) {
         audioEn || null,
         audioZh || null,
 
-        req.auth.userId,
+        // Du khách gửi bằng thiết bị (không có tài khoản) hoặc bằng tài khoản.
+        visitorColumns(req).userId,
+        visitorColumns(req).deviceId,
       ]
     );
 
@@ -363,7 +386,7 @@ export async function createPoi(req, res, next) {
 
     await connection.commit();
 
-    queuePoiAudioGeneration(Number(poiId));
+    // Audio chỉ tạo khi admin duyệt (reviewPoi), không tốn tài nguyên cho POI bị từ chối.
     console.log(
       "CREATE POI COMMIT SUCCESS:",
       poiId
@@ -596,6 +619,10 @@ export async function reviewPoi(
         message:
           "Không tìm thấy POI đang chờ duyệt.",
       });
+    }
+
+    if (status === "approved") {
+      queuePoiAudioGeneration(Number(poiId));
     }
 
     const [rows] =

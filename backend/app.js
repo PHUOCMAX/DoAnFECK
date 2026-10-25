@@ -1,4 +1,5 @@
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import express from "express";
 import path from "path";
 import { VNPay } from "vnpay";
@@ -26,6 +27,7 @@ import adminPoiRoutes from "./routes/adminPoiRoutes.js";
 import poiRoutes from "./routes/poiRoutes.js";
 import checkinRoutes from "./routes/checkinRoutes.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
+import adminDeviceRoutes from "./routes/adminDeviceRoutes.js";
 
 import {
   createSession,
@@ -33,10 +35,18 @@ import {
   authorizeByQr,
   getSessionAuthorization,
   getMySessionAuthorizations,
+  listSessions,
+  updateSessionStatus,
+  setDefaultSession,
 } from "./controllers/sessionController.js";
 
 import { requireAuth } from "./middleware/authMiddleware.js";
 import { requireAdmin } from "./middleware/adminMiddleware.js";
+import {
+  requireVisitor,
+  visitorColumns,
+  visitorCondition,
+} from "./middleware/visitorMiddleware.js";
 
 /* =========================================================
    HELPERS
@@ -110,117 +120,183 @@ function corsOptions() {
 
 /* =========================================================
    PAYMENT MIDDLEWARE
-   Session có price > 0 thì user phải paid mới authorize QR.
+   Tour có giá thì du khách (thiết bị) phải có một khoản paid mới được vào.
+   QR và hạn tour được kiểm tra TRƯỚC, để không bao giờ đòi tiền
+   cho tour đã hết hạn hoặc chưa bắt đầu.
 ========================================================= */
 
 async function requirePaidSession(req, res, next) {
   try {
-    const sessionId = Number(
-      req.body?.sessionId || req.body?.qrSessionId
-    );
+    const qrToken =
+      typeof req.body?.qrToken === "string"
+        ? req.body.qrToken.trim()
+        : "";
 
-    /*
-     * Với QR hiện tại, sessionId không nằm trong body.
-     * Ta lấy qrToken để xác định session.
-     */
-    const qrToken = req.body?.qrToken;
-
-    if (!qrToken && (!Number.isInteger(sessionId) || sessionId < 1)) {
+    if (!qrToken) {
       return next();
     }
 
-    let resolvedSessionId = sessionId;
-
-    if (qrToken) {
-      const [rows] = await pool.execute(
-        `
-          SELECT session_id
-          FROM qr_codes
-          WHERE qr_token = ?
-          LIMIT 1
-        `,
-        [qrToken.trim()]
-      );
-
-      if (rows.length === 0) {
-        return next();
-      }
-
-      resolvedSessionId = Number(rows[0].session_id);
-    }
-
-    const [sessions] = await pool.execute(
+    const [rows] = await pool.execute(
       `
-        SELECT id, price, status
-        FROM tour_sessions
-        WHERE id = ?
+        SELECT
+          q.status AS qr_status,
+          q.expires_at AS qr_expires_at,
+          s.id,
+          s.price,
+          s.status,
+          s.starts_at,
+          s.expires_at
+        FROM qr_codes q
+        INNER JOIN tour_sessions s
+          ON s.id = q.session_id
+        WHERE q.qr_token = ?
         LIMIT 1
       `,
-      [resolvedSessionId]
+      [qrToken]
     );
 
-    if (sessions.length === 0) {
+    // QR không tồn tại / không hợp lệ: để authorizeByQr trả lỗi chi tiết.
+    if (rows.length === 0) {
       return next();
     }
 
-    const session = sessions[0];
+    const session = rows[0];
+    const now = new Date();
+    const usable =
+      session.qr_status === "active" &&
+      (!session.qr_expires_at || new Date(session.qr_expires_at) > now) &&
+      session.status === "active" &&
+      (!session.starts_at || new Date(session.starts_at) <= now) &&
+      (!session.expires_at || new Date(session.expires_at) > now);
+
+    if (!usable) {
+      return next();
+    }
+
     const price = Number(session.price || 0);
 
-    // Session miễn phí.
     if (price <= 0) {
       return next();
     }
 
-    const [payments] = await pool.execute(
+    const who = visitorCondition(req);
+
+    // Chỉ cần có một khoản paid (tiền mặt hay VNPAY đều được).
+    const [paid] = await pool.execute(
       `
-        SELECT
-          id,
-          amount,
-          currency,
-          method,
-          status,
-          provider,
-          transaction_code,
-          paid_at
+        SELECT id
         FROM payments
         WHERE session_id = ?
-          AND user_id = ?
+          AND ${who.sql}
+          AND status = 'paid'
+          -- Một lần trả tiền chỉ dùng được trong tourAccessHours giờ.
+          AND paid_at >= NOW() - INTERVAL ? MINUTE
+        LIMIT 1
+      `,
+      [session.id, ...who.params, Math.round(env.tourAccessHours * 60)]
+    );
+
+    if (paid.length > 0) {
+      return next();
+    }
+
+    const [latest] = await pool.execute(
+      `
+        SELECT id, amount, method, status
+        FROM payments
+        WHERE session_id = ?
+          AND ${who.sql}
+          -- Khoản paid ở đây chắc chắn đã quá hạn (còn hạn thì đã cho qua):
+          -- không gửi về, để trang thanh toán cho trả lượt mới.
+          AND status <> 'paid'
         ORDER BY id DESC
         LIMIT 1
       `,
-      [
-        resolvedSessionId,
-        req.auth.userId,
-      ]
+      [session.id, ...who.params]
     );
 
-    const payment = payments[0];
+    const payment = latest[0];
 
-    if (!payment || payment.status !== "paid") {
-      return res.status(402).json({
-        success: false,
-        message: "Bạn cần thanh toán trước khi vào session.",
-        paymentRequired: true,
-        session: {
-          id: Number(session.id),
-          price,
-          currency: "VND",
-        },
-        payment: payment
-          ? {
-              id: Number(payment.id),
-              amount: Number(payment.amount),
-              method: payment.method,
-              status: payment.status,
-            }
-          : null,
-      });
-    }
-
-    return next();
+    return res.status(402).json({
+      success: false,
+      message: "Bạn cần thanh toán trước khi vào tour.",
+      paymentRequired: true,
+      session: {
+        id: Number(session.id),
+        price,
+        currency: "VND",
+      },
+      payment: payment
+        ? {
+            id: Number(payment.id),
+            amount: Number(payment.amount),
+            method: payment.method,
+            status: payment.status,
+          }
+        : null,
+    });
   } catch (error) {
     return next(error);
   }
+}
+
+/* =========================================================
+   CẤP QUYỀN NGAY KHI THANH TOÁN THÀNH CÔNG
+   Trả tiền xong là có quyền tour, không cần quét lại QR.
+   Quyền kéo dài env.tourAccessHours tính từ lúc trả (không vượt hạn tour).
+========================================================= */
+
+async function grantAccessForPaidPayment(paymentId) {
+  const [rows] = await pool.execute(
+    `
+      SELECT p.session_id, p.user_id, p.device_id, p.paid_at, s.expires_at
+      FROM payments p
+      INNER JOIN tour_sessions s ON s.id = p.session_id
+      WHERE p.id = ?
+        AND p.status = 'paid'
+        AND p.paid_at IS NOT NULL
+    `,
+    [paymentId]
+  );
+
+  const payment = rows[0];
+
+  if (!payment || (!payment.device_id && !payment.user_id)) {
+    return;
+  }
+
+  let accessUntil = new Date(
+    new Date(payment.paid_at).getTime() + env.tourAccessHours * 60 * 60 * 1000
+  );
+
+  if (payment.expires_at && new Date(payment.expires_at) < accessUntil) {
+    accessUntil = new Date(payment.expires_at);
+  }
+
+  if (accessUntil <= new Date()) {
+    return;
+  }
+
+  await pool.execute(
+    `
+      INSERT INTO session_authorizations (
+        session_id, user_id, device_id, authorization_source,
+        status, authorized_at, expires_at
+      )
+      VALUES (?, ?, ?, 'qr', 'active', CURRENT_TIMESTAMP, ?)
+      ON DUPLICATE KEY UPDATE
+        status = 'active',
+        authorized_at = CURRENT_TIMESTAMP,
+        expires_at = VALUES(expires_at),
+        revoked_at = NULL
+    `,
+    [
+      payment.session_id,
+      payment.device_id ? null : payment.user_id,
+      payment.device_id,
+      accessUntil,
+    ]
+  );
 }
 
 /* =========================================================
@@ -282,10 +358,22 @@ async function createPayment(req, res, next) {
     const session = sessions[0];
     const amount = Number(session.price || 0);
 
-    if (session.status !== "active") {
+    const now = new Date();
+
+    if (
+      session.status !== "active" ||
+      (session.expires_at && new Date(session.expires_at) <= now)
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Session không còn hoạt động.",
+        message: "Tour đã kết thúc, không thể thanh toán.",
+      });
+    }
+
+    if (session.starts_at && new Date(session.starts_at) > now) {
+      return res.status(400).json({
+        success: false,
+        message: "Tour chưa bắt đầu.",
       });
     }
 
@@ -313,14 +401,16 @@ async function createPayment(req, res, next) {
           created_at
         FROM payments
         WHERE session_id = ?
-          AND user_id = ?
+          AND ${visitorCondition(req).sql}
           AND status = 'paid'
+          AND paid_at >= NOW() - INTERVAL ? MINUTE
         ORDER BY id DESC
         LIMIT 1
       `,
       [
         normalizedSessionId,
-        req.auth.userId,
+        ...visitorCondition(req).params,
+        Math.round(env.tourAccessHours * 60),
       ]
     );
 
@@ -334,6 +424,39 @@ async function createPayment(req, res, next) {
           amount: Number(paidPayments[0].amount),
         },
       });
+    }
+
+    if (method === "offline") {
+      const [waiting] = await pool.execute(
+        `
+          SELECT id, session_id, user_id, amount, currency, method, status,
+                 provider, transaction_code, note, paid_at, created_at, updated_at
+          FROM payments
+          WHERE session_id = ?
+            AND ${visitorCondition(req).sql}
+            AND method = 'offline'
+            AND status = 'pending'
+          ORDER BY id DESC
+          LIMIT 1
+        `,
+        [normalizedSessionId, ...visitorCondition(req).params]
+      );
+
+      if (waiting.length > 0) {
+        return res.json({
+          success: true,
+          message: "Bạn đã có yêu cầu thanh toán tiền mặt đang chờ xác nhận.",
+          payment: {
+            ...waiting[0],
+            id: Number(waiting[0].id),
+            sessionId: Number(waiting[0].session_id),
+            userId: waiting[0].user_id ? Number(waiting[0].user_id) : null,
+            amount: Number(waiting[0].amount),
+          },
+          paymentUrl: null,
+          paymentProvider: null,
+        });
+      }
     }
 
         if (method === "online" && !env.vnpay.enabled) {
@@ -353,13 +476,16 @@ async function createPayment(req, res, next) {
         ? `VNP${Date.now()}${Math.floor(Math.random() * 1000000)
             .toString()
             .padStart(6, "0")}`
-        : `OFFLINE-${Date.now()}-${req.auth.userId}`;
+        : `OFFLINE-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+
+    const owner = visitorColumns(req);
 
     const [result] = await pool.execute(
       `
         INSERT INTO payments (
           session_id,
           user_id,
+          device_id,
           amount,
           currency,
           method,
@@ -368,11 +494,12 @@ async function createPayment(req, res, next) {
           transaction_code,
           note
         )
-        VALUES (?, ?, ?, 'VND', ?, 'pending', ?, ?, ?)
+        VALUES (?, ?, ?, ?, 'VND', ?, 'pending', ?, ?, ?)
       `,
       [
         normalizedSessionId,
-        req.auth.userId,
+        owner.userId,
+        owner.deviceId,
         amount,
         method,
         provider,
@@ -438,7 +565,7 @@ const clientIp = remoteIp.startsWith("::ffff:")
         ...rows[0],
         id: Number(rows[0].id),
         sessionId: Number(rows[0].session_id),
-        userId: Number(rows[0].user_id),
+        userId: rows[0].user_id ? Number(rows[0].user_id) : null,
         amount: Number(rows[0].amount),
       },
       paymentUrl,
@@ -493,13 +620,17 @@ async function getMyPayment(req, res, next) {
           updated_at
         FROM payments
         WHERE session_id = ?
-          AND user_id = ?
-        ORDER BY id DESC
+          AND ${visitorCondition(req).sql}
+          -- Khoản paid quá thời hạn mỗi lượt coi như không còn.
+          AND (status <> 'paid' OR paid_at >= NOW() - INTERVAL ? MINUTE)
+        -- Còn khoản paid hợp lệ thì trả khoản đó, không thì khoản mới nhất.
+        ORDER BY (status = 'paid') DESC, id DESC
         LIMIT 1
       `,
       [
         sessionId,
-        req.auth.userId,
+        ...visitorCondition(req).params,
+        Math.round(env.tourAccessHours * 60),
       ]
     );
 
@@ -518,7 +649,7 @@ async function getMyPayment(req, res, next) {
         ...payment,
         id: Number(payment.id),
         sessionId: Number(payment.session_id),
-        userId: Number(payment.user_id),
+        userId: payment.user_id ? Number(payment.user_id) : null,
         amount: Number(payment.amount),
       },
     });
@@ -555,10 +686,10 @@ async function setDemoPaymentResult(req, res, next) {
       `
         SELECT id, session_id, user_id, amount, currency, method, status, provider
         FROM payments
-        WHERE id = ? AND user_id = ?
+        WHERE id = ? AND ${visitorCondition(req).sql}
         LIMIT 1
       `,
-      [paymentId, req.auth.userId]
+      [paymentId, ...visitorCondition(req).params]
     );
 
     if (payments.length === 0) {
@@ -590,10 +721,14 @@ async function setDemoPaymentResult(req, res, next) {
         SET status = ?,
             paid_at = CASE WHEN ? = 'paid' THEN CURRENT_TIMESTAMP ELSE NULL END,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ? AND status = 'pending'
+        WHERE id = ? AND status = 'pending'
       `,
-      [status, status, paymentId, req.auth.userId]
+      [status, status, paymentId]
     );
+
+    if (status === "paid") {
+      await grantAccessForPaidPayment(paymentId);
+    }
 
     return res.json({
       success: true,
@@ -690,6 +825,8 @@ async function confirmPayment(req, res, next) {
       [paymentId]
     );
 
+    await grantAccessForPaidPayment(paymentId);
+
     return res.json({
       success: true,
       message: "Xác nhận thanh toán thành công.",
@@ -782,9 +919,14 @@ async function getMonitoringStats(req, res, next) {
       [authorizations],
       [revenue],
       [recentPayments],
+      [presence],
+      [presenceByTour],
     ] = await Promise.all([
+      // online = có gọi API trong 5 phút gần nhất (last_seen_at do requireAuth ghi)
       pool.query(`
-        SELECT COUNT(*) AS total
+        SELECT
+          COUNT(*) AS total,
+          SUM(last_seen_at >= NOW() - INTERVAL 5 MINUTE) AS online
         FROM users
       `),
 
@@ -800,8 +942,15 @@ async function getMonitoringStats(req, res, next) {
       pool.query(`
         SELECT
           COUNT(*) AS total,
-          SUM(status = 'active') AS active,
-          SUM(status = 'expired') AS expired,
+          -- status chỉ được ghi lúc tạo, nên hết hạn phải tính theo expires_at
+          SUM(
+            status = 'active'
+            AND (expires_at IS NULL OR expires_at > NOW())
+          ) AS active,
+          SUM(
+            status = 'expired'
+            OR (status = 'active' AND expires_at IS NOT NULL AND expires_at <= NOW())
+          ) AS expired,
           SUM(status = 'revoked') AS revoked
         FROM tour_sessions
       `),
@@ -821,10 +970,18 @@ async function getMonitoringStats(req, res, next) {
         FROM checkins
       `),
 
+      // Số người dùng (không phải số bản ghi) đang có quyền tour còn hiệu lực,
+      // cùng điều kiện với requireTourAuthorization.
       pool.query(`
-        SELECT COUNT(*) AS total
-        FROM session_authorizations
-        WHERE status = 'active'
+        SELECT COUNT(DISTINCT COALESCE(sa.device_id, CONCAT('u', sa.user_id))) AS total
+        FROM session_authorizations sa
+        INNER JOIN tour_sessions s
+          ON s.id = sa.session_id
+        WHERE sa.status = 'active'
+          AND s.status = 'active'
+          AND (sa.expires_at IS NULL OR sa.expires_at > NOW())
+          AND (s.starts_at IS NULL OR s.starts_at <= NOW())
+          AND (s.expires_at IS NULL OR s.expires_at > NOW())
       `),
 
       pool.query(`
@@ -847,6 +1004,28 @@ async function getMonitoringStats(req, res, next) {
         ORDER BY id DESC
         LIMIT 5
       `),
+
+      // Thiết bị đang trong tour = gửi heartbeat trong 2 phút gần nhất.
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT CASE
+            WHEN last_seen_at >= NOW() - INTERVAL 2 MINUTE THEN device_id
+          END) AS in_tour_now,
+          COUNT(DISTINCT CASE
+            WHEN joined_at >= CURDATE() THEN device_id
+          END) AS joined_today
+        FROM tour_presence
+      `),
+
+      pool.query(`
+        SELECT s.id, s.name, COUNT(p.device_id) AS in_tour_now
+        FROM tour_presence p
+        INNER JOIN tour_sessions s ON s.id = p.session_id
+        WHERE p.last_seen_at >= NOW() - INTERVAL 2 MINUTE
+        GROUP BY s.id, s.name
+        ORDER BY in_tour_now DESC
+        LIMIT 10
+      `),
     ]);
 
     return res.json({
@@ -855,6 +1034,7 @@ async function getMonitoringStats(req, res, next) {
       stats: {
         users: {
           total: Number(users[0].total),
+          online: Number(users[0].online || 0),
         },
 
         pois: {
@@ -881,6 +1061,16 @@ async function getMonitoringStats(req, res, next) {
 
         checkins: {
           total: Number(checkins[0].total || 0),
+        },
+
+        presence: {
+          inTourNow: Number(presence[0].in_tour_now || 0),
+          joinedToday: Number(presence[0].joined_today || 0),
+          byTour: presenceByTour.map((row) => ({
+            sessionId: Number(row.id),
+            name: row.name,
+            inTourNow: Number(row.in_tour_now),
+          })),
         },
 
         activeAuthorizations: Number(
@@ -1023,6 +1213,30 @@ export function createApp() {
     createSession
   );
 
+  // Admin: danh sách tour (trang "Tour và QR")
+  app.get(
+    "/api/sessions",
+    requireAuth,
+    requireAdmin,
+    listSessions
+  );
+
+  // Admin: kết thúc / mở lại tour
+  app.patch(
+    "/api/sessions/:sessionId/status",
+    requireAuth,
+    requireAdmin,
+    updateSessionStatus
+  );
+
+  // Admin: đặt tour mặc định (QR dùng chung)
+  app.patch(
+    "/api/sessions/:sessionId/default",
+    requireAuth,
+    requireAdmin,
+    setDefaultSession
+  );
+
   // Admin cập nhật giá session
   app.patch(
     "/api/sessions/:sessionId/price",
@@ -1043,20 +1257,20 @@ export function createApp() {
   // Session có price > 0 => phải paid trước
   app.post(
     "/api/sessions/authorize",
-    requireAuth,
+    requireVisitor,
     requirePaidSession,
     authorizeByQr
   );
 // User lấy danh sách session đã được cấp quyền
 app.get(
   "/api/sessions/my-authorizations",
-  requireAuth,
+  requireVisitor,
   getMySessionAuthorizations
 );
   // User kiểm tra quyền của mình
   app.get(
     "/api/sessions/:sessionId/authorization",
-    requireAuth,
+    requireVisitor,
     getSessionAuthorization
   );
 
@@ -1094,7 +1308,7 @@ app.get(
       const transactionCode = String(verified.vnp_TxnRef ?? "");
 
       const [payments] = await pool.execute(
-        `SELECT id, session_id, amount, method, status, provider
+        `SELECT id, session_id, device_id, amount, method, status, provider
          FROM payments
          WHERE transaction_code = ?
          LIMIT 1`,
@@ -1141,6 +1355,8 @@ app.get(
         }
       }
 
+      await grantAccessForPaidPayment(payment.id);
+
       resultUrl.searchParams.set(
         "status",
         isSuccess && amountMatches ? "success" : "failed"
@@ -1149,6 +1365,20 @@ app.get(
         "sessionId",
         String(payments[0].session_id)
       );
+
+      // Ngân hàng có thể đưa khách về một trình duyệt khác (ví dụ quét QR
+      // bằng Zalo, quay về Safari). Kèm mã ký ngắn hạn để trình duyệt đó
+      // nhận lại đúng mã thiết bị đã thanh toán.
+      if (payments[0].device_id) {
+        resultUrl.searchParams.set(
+          "device",
+          jwt.sign(
+            { purpose: "device-transfer", deviceId: payments[0].device_id },
+            env.jwtSecret,
+            { expiresIn: "15m" }
+          )
+        );
+      }
 
       return res.redirect(resultUrl.toString());
     } catch (error) {
@@ -1267,6 +1497,7 @@ if (
         }
 
         await connection.commit();
+        await grantAccessForPaidPayment(payment.id);
         return res.json(IpnSuccess);
       } catch (error) {
         await connection.rollback();
@@ -1280,24 +1511,77 @@ if (
       return res.status(500).json(IpnUnknownError);
     }
   });
+  // Trình duyệt quay về từ VNPAY đổi mã ký lấy mã thiết bị đã thanh toán.
+  app.post("/api/device/claim", (req, res) => {
+    try {
+      const payload = jwt.verify(String(req.body?.token || ""), env.jwtSecret);
+
+      if (payload?.purpose !== "device-transfer" || !payload.deviceId) {
+        throw new Error("invalid");
+      }
+
+      return res.json({ success: true, deviceId: payload.deviceId });
+    } catch {
+      return res.status(400).json({
+        success: false,
+        message: "Mã chuyển thiết bị không hợp lệ hoặc đã hết hạn.",
+      });
+    }
+  });
+
+  // Heartbeat: thiết bị đang mở app trong tour gửi mỗi ~60 giây.
+  // Ghi nhận cho mọi tour mà thiết bị đang có quyền hợp lệ.
+  app.post(
+    "/api/tour/heartbeat",
+    requireVisitor,
+    async (req, res, next) => {
+      try {
+        if (!req.visitor.deviceId) {
+          return res.json({ success: true, tours: 0 });
+        }
+
+        const [result] = await pool.execute(
+          `
+            INSERT INTO tour_presence (session_id, device_id, last_seen_at)
+            SELECT sa.session_id, sa.device_id, CURRENT_TIMESTAMP
+            FROM session_authorizations sa
+            INNER JOIN tour_sessions s ON s.id = sa.session_id
+            WHERE sa.device_id = ?
+              AND sa.status = 'active'
+              AND s.status = 'active'
+              AND (sa.expires_at IS NULL OR sa.expires_at > CURRENT_TIMESTAMP)
+              AND (s.starts_at IS NULL OR s.starts_at <= CURRENT_TIMESTAMP)
+              AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+            ON DUPLICATE KEY UPDATE last_seen_at = CURRENT_TIMESTAMP
+          `,
+          [req.visitor.deviceId]
+        );
+
+        return res.json({ success: true, tours: result.affectedRows > 0 });
+      } catch (error) {
+        return next(error);
+      }
+    }
+  );
+
   // User tạo payment
   app.post(
     "/api/payments",
-    requireAuth,
+    requireVisitor,
     createPayment
   );
 
   // User xem payment của mình
   app.get(
     "/api/payments/:sessionId",
-    requireAuth,
+    requireVisitor,
     getMyPayment
   );
 
   // User mô phỏng kết quả cho đơn online demo của chính mình.
   app.post(
     "/api/payments/:paymentId/demo-result",
-    requireAuth,
+    requireVisitor,
     setDemoPaymentResult
   );
 
@@ -1319,6 +1603,12 @@ app.get(
   requireAdmin,
   getMonitoringStats
 );
+  // Khách theo thiết bị (tra cứu, cấp lại quyền tour)
+  app.use(
+    "/api/admin/devices",
+    adminDeviceRoutes
+  );
+
   app.use(
     "/api/admin",
     adminPoiRoutes

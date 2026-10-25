@@ -1,5 +1,10 @@
 import crypto from "crypto";
 import pool from "../config/db.js";
+import { env } from "../config/env.js";
+import {
+  visitorColumns,
+  visitorCondition,
+} from "../middleware/visitorMiddleware.js";
 
 /* =========================================================
    HELPERS
@@ -33,8 +38,6 @@ export async function createSession(req, res, next) {
       expiresAt = null,
     } = req.body ?? {};
 
-    const sessionToken = generateToken();
-
     const normalizedStartsAt =
       normalizeNullableDate(startsAt);
 
@@ -65,17 +68,15 @@ export async function createSession(req, res, next) {
     const [result] = await pool.execute(
       `
         INSERT INTO tour_sessions (
-          session_token,
           name,
           status,
           starts_at,
           expires_at,
           created_by
         )
-        VALUES (?, ?, 'active', ?, ?, ?)
+        VALUES (?, 'active', ?, ?, ?)
       `,
       [
-        sessionToken,
         typeof name === "string" && name.trim()
           ? name.trim()
           : null,
@@ -90,7 +91,6 @@ export async function createSession(req, res, next) {
       message: "Tạo session thành công.",
       session: {
         id: Number(result.insertId),
-        sessionToken,
         name:
           typeof name === "string" && name.trim()
             ? name.trim()
@@ -333,6 +333,7 @@ export async function authorizeByQr(
             q.expires_at AS qr_expires_at,
 
             s.name AS session_name,
+            s.price AS session_price,
             s.status AS session_status,
             s.starts_at,
             s.expires_at AS session_expires_at
@@ -415,19 +416,58 @@ export async function authorizeByQr(
           "Session đã hết hạn.",
       });
     }
-console.log("AUTHORIZE USER:", req.auth?.userId);
-console.log("AUTHORIZE SESSION:", qr.session_id);
+    // Cấp quyền cho thiết bị (du khách) hoặc tài khoản (app mobile cũ).
+    // Mỗi cặp (tour, thiết bị) / (tour, tài khoản) chỉ có một bản ghi.
+    const owner = visitorColumns(req);
+
+    // Mỗi lượt được dùng env.tourAccessHours giờ:
+    // - tour có phí: tính từ lúc thanh toán (quét lại không được cộng thêm giờ)
+    // - tour miễn phí: tính từ lần quét này
+    const accessMs = env.tourAccessHours * 60 * 60 * 1000;
+    let accessFrom = new Date();
+
+    if (Number(qr.session_price || 0) > 0) {
+      const who = visitorCondition(req);
+      const [paid] = await pool.execute(
+        `
+          SELECT paid_at
+          FROM payments
+          WHERE session_id = ?
+            AND ${who.sql}
+            AND status = 'paid'
+          ORDER BY paid_at DESC
+          LIMIT 1
+        `,
+        [qr.session_id, ...who.params]
+      );
+
+      if (paid[0]?.paid_at) {
+        accessFrom = new Date(paid[0].paid_at);
+      }
+    }
+
+    let accessUntil = new Date(accessFrom.getTime() + accessMs);
+
+    if (
+      qr.session_expires_at &&
+      new Date(qr.session_expires_at) < accessUntil
+    ) {
+      accessUntil = new Date(qr.session_expires_at);
+    }
+
     await pool.execute(
       `
         INSERT INTO session_authorizations (
           session_id,
           user_id,
+          device_id,
           authorization_source,
           status,
           authorized_at,
           expires_at
         )
         VALUES (
+          ?,
           ?,
           ?,
           'qr',
@@ -445,29 +485,12 @@ console.log("AUTHORIZE SESSION:", qr.session_id);
       `,
       [
         qr.session_id,
-        req.auth.userId,
-        qr.session_expires_at,
+        owner.userId,
+        owner.deviceId,
+        accessUntil,
       ]
     );
-    console.log("AUTHORIZATION SAVED");
-const [checkRows] = await pool.execute(
-  `
-    SELECT
-      DATABASE() AS database_name,
-      @@hostname AS mysql_host,
-      id,
-      session_id,
-      user_id,
-      status
-    FROM session_authorizations
-    WHERE user_id = ?
-      AND session_id = ?
-  `,
-  [req.auth.userId, qr.session_id]
-);
-console.log("AUTHORIZATION DB CHECK:", checkRows);
 
-console.log("AUTHORIZATION DB CHECK:", checkRows);
     return res.json({
       success: true,
       message:
@@ -477,8 +500,11 @@ console.log("AUTHORIZATION DB CHECK:", checkRows);
         sessionId:
           Number(qr.session_id),
 
-        userId:
-          Number(req.auth.userId),
+        userId: owner.userId,
+
+        deviceId: owner.deviceId,
+
+        expiresAt: accessUntil,
 
         source: "qr",
 
@@ -516,16 +542,8 @@ export async function getMySessionAuthorizations(
   res,
   next
 ) {
-    console.log("CURRENT AUTH USER:", req.auth?.userId);
   try {
-    const userId = Number(req.auth?.userId);
-
-    if (!Number.isInteger(userId) || userId < 1) {
-      return res.status(401).json({
-        success: false,
-        message: "Bạn cần đăng nhập.",
-      });
-    }
+    const who = visitorCondition(req, "sa.");
 
     const [rows] = await pool.execute(
       `
@@ -547,7 +565,7 @@ export async function getMySessionAuthorizations(
         INNER JOIN tour_sessions s
           ON s.id = sa.session_id
 
-        WHERE sa.user_id = ?
+        WHERE ${who.sql}
           AND sa.status = 'active'
           AND s.status = 'active'
           AND (
@@ -565,7 +583,7 @@ export async function getMySessionAuthorizations(
 
         ORDER BY sa.authorized_at DESC
       `,
-      [userId]
+      who.params
     );
 
     return res.json({
@@ -621,6 +639,8 @@ export async function getSessionAuthorization(
       });
     }
 
+    const who = visitorCondition(req, "sa.");
+
     const [rows] =
       await pool.execute(
         `
@@ -644,13 +664,13 @@ export async function getSessionAuthorization(
             ON s.id = sa.session_id
 
           WHERE sa.session_id = ?
-            AND sa.user_id = ?
+            AND ${who.sql}
 
           LIMIT 1
         `,
         [
           sessionId,
-          req.auth.userId,
+          ...who.params,
         ]
       );
 
@@ -744,5 +764,208 @@ export async function getSessionAuthorization(
     );
 
     return next(error);
+  }
+}
+/* =========================================================
+   ADMIN - LIST TOURS (trang "Tour và QR")
+========================================================= */
+
+export async function listSessions(req, res, next) {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        s.id,
+        s.name,
+        s.price,
+        s.status,
+        s.is_default,
+        s.starts_at,
+        s.expires_at,
+        s.created_at,
+        (
+          SELECT q.qr_token
+          FROM qr_codes q
+          WHERE q.session_id = s.id
+            AND q.status = 'active'
+            AND (q.expires_at IS NULL OR q.expires_at > NOW())
+          ORDER BY q.id
+          LIMIT 1
+        ) AS qr_token,
+        (
+          SELECT COUNT(*)
+          FROM qr_codes q
+          WHERE q.session_id = s.id
+        ) AS qr_count,
+        (
+          SELECT COUNT(*)
+          FROM tour_presence p
+          WHERE p.session_id = s.id
+            AND p.last_seen_at >= NOW() - INTERVAL 2 MINUTE
+        ) AS in_tour_now,
+        (
+          SELECT COUNT(*)
+          FROM payments pa
+          WHERE pa.session_id = s.id
+            AND pa.status = 'paid'
+        ) AS paid_count
+      FROM tour_sessions s
+      ORDER BY s.is_default DESC, s.id DESC
+      LIMIT 100
+    `);
+
+    const now = new Date();
+
+    return res.json({
+      success: true,
+      sessions: rows.map((row) => {
+        // status chỉ ghi lúc tạo / khi admin kết thúc,
+        // nên trạng thái thật phải xét cả thời gian.
+        let state = "running";
+
+        if (
+          row.status !== "active" ||
+          (row.expires_at && new Date(row.expires_at) <= now)
+        ) {
+          state = "ended";
+        } else if (row.starts_at && new Date(row.starts_at) > now) {
+          state = "upcoming";
+        }
+
+        return {
+          id: Number(row.id),
+          name: row.name,
+          price: Number(row.price || 0),
+          status: row.status,
+          state,
+          isDefault: Boolean(row.is_default),
+          startsAt: row.starts_at,
+          expiresAt: row.expires_at,
+          createdAt: row.created_at,
+          qrToken: row.qr_token,
+          qrCount: Number(row.qr_count),
+          inTourNow: Number(row.in_tour_now),
+          paidCount: Number(row.paid_count),
+        };
+      }),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/* =========================================================
+   ADMIN - KẾT THÚC / MỞ LẠI TOUR
+========================================================= */
+
+export async function updateSessionStatus(req, res, next) {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    const status = req.body?.status;
+
+    if (!Number.isInteger(sessionId) || sessionId < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Session ID không hợp lệ.",
+      });
+    }
+
+    if (!["active", "expired"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Trạng thái chỉ được là active hoặc expired.",
+      });
+    }
+
+    const [rows] = await pool.execute(
+      "SELECT id, is_default, expires_at FROM tour_sessions WHERE id = ?",
+      [sessionId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy tour.",
+      });
+    }
+
+    if (status === "expired" && rows[0].is_default) {
+      return res.status(400).json({
+        success: false,
+        message: "Không thể kết thúc tour mặc định. Hãy đặt tour khác làm mặc định trước.",
+      });
+    }
+
+    if (
+      status === "active" &&
+      rows[0].expires_at &&
+      new Date(rows[0].expires_at) <= new Date()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Tour đã quá thời gian kết thúc, không mở lại được.",
+      });
+    }
+
+    await pool.execute(
+      "UPDATE tour_sessions SET status = ? WHERE id = ?",
+      [status, sessionId]
+    );
+
+    return res.json({ success: true, status });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/* =========================================================
+   ADMIN - ĐẶT TOUR MẶC ĐỊNH
+========================================================= */
+
+export async function setDefaultSession(req, res, next) {
+  const sessionId = Number(req.params.sessionId);
+
+  if (!Number.isInteger(sessionId) || sessionId < 1) {
+    return res.status(400).json({
+      success: false,
+      message: "Session ID không hợp lệ.",
+    });
+  }
+
+  let connection;
+
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute(
+      "SELECT id, status, expires_at FROM tour_sessions WHERE id = ? FOR UPDATE",
+      [sessionId]
+    );
+
+    if (
+      rows.length === 0 ||
+      rows[0].status !== "active" ||
+      (rows[0].expires_at && new Date(rows[0].expires_at) <= new Date())
+    ) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ tour đang chạy mới được đặt làm mặc định.",
+      });
+    }
+
+    await connection.execute("UPDATE tour_sessions SET is_default = (id = ?)", [
+      sessionId,
+    ]);
+    await connection.commit();
+
+    return res.json({ success: true, defaultSessionId: sessionId });
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+    }
+    return next(error);
+  } finally {
+    connection?.release();
   }
 }

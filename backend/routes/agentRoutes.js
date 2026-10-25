@@ -4,15 +4,15 @@ import {
   chatWithAgent,
 } from "../controllers/agentController.js";
 
-import {
-  requireAuth,
-} from "../middleware/authMiddleware.js";
+import { requireVisitor } from "../middleware/visitorMiddleware.js";
+import { requireTourAuthorization } from "../middleware/requireTourAuthorization.js";
 
 const router = express.Router();
 
 router.post(
   "/chat",
-  requireAuth,
+  requireVisitor,
+  requireTourAuthorization,
   chatWithAgent
 );
 

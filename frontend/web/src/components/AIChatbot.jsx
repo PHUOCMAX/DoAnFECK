@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import { chatWithAgent } from "../services/agentService";
-import { getUserToken } from "../services/userService";
 
 export default function AIChatbot({
   language = "vi",
@@ -54,22 +53,6 @@ export default function AIChatbot({
       return;
     }
 
-    const token = getUserToken();
-
-    if (!token) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          role: "assistant",
-          content:
-            "Bạn cần đăng nhập để sử dụng trợ lý AI.",
-        },
-      ]);
-
-      return;
-    }
-
     setQuestion("");
 
     setMessages((prev) => [
@@ -86,7 +69,7 @@ export default function AIChatbot({
     try {
       const result =
         await chatWithAgent(
-          token,
+          null,
           text,
           language
         );

@@ -5,15 +5,13 @@ import {
   createCheckin,
   getMyCheckins,
   getTourAuthorization,
-  getUserToken,
 } from "../../services/userService";
 
 /*
- * Giống mobile: chỉ chạy GPS / check-in / thuyết minh
- * khi đã đăng nhập VÀ đã được cấp quyền tour.
+ * Chỉ chạy GPS / check-in / thuyết minh khi thiết bị đã có quyền tour.
  */
 function canRunGeofence() {
-  return Boolean(getUserToken() && getTourAuthorization());
+  return Boolean(getTourAuthorization());
 }
 
 import { useLanguage } from "../../i18n";

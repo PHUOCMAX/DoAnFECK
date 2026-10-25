@@ -8,6 +8,82 @@ const API_URL = (
 
 console.log("API_URL =", API_URL);
 /* =========================================================
+   DEVICE ID
+   Du khách không cần đăng nhập: mỗi trình duyệt có một mã thiết bị
+   ngẫu nhiên, lưu trong localStorage, gửi kèm mọi request.
+========================================================= */
+
+const DEVICE_ID_KEY = "device_id";
+
+function createUuid() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  // Dự phòng cho trình duyệt cũ / trang không chạy HTTPS.
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+export function getDeviceId() {
+  let id = null;
+
+  try {
+    id = localStorage.getItem(DEVICE_ID_KEY);
+  } catch {
+    // localStorage bị chặn: dùng mã tạm cho phiên này.
+  }
+
+  if (!id) {
+    id = createUuid();
+
+    try {
+      localStorage.setItem(DEVICE_ID_KEY, id);
+    } catch {
+      // bỏ qua
+    }
+  }
+
+  return id;
+}
+
+/*
+ * Ngân hàng đưa khách về một trình duyệt khác với trình duyệt đã thanh toán
+ * (ví dụ quét QR bằng Zalo, quay về Safari): đổi mã ký từ backend lấy mã
+ * thiết bị đã trả tiền, để trình duyệt này dùng tiếp quyền tour.
+ */
+export async function claimDeviceTransfer(token) {
+  const response = await fetch(`${API_URL}/api/device/claim`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !data?.deviceId) {
+    return null;
+  }
+
+  try {
+    localStorage.setItem(DEVICE_ID_KEY, data.deviceId);
+  } catch {
+    // bỏ qua
+  }
+
+  return data.deviceId;
+}
+
+export function deviceHeaders() {
+  return { "X-Device-Id": getDeviceId() };
+}
+
+/* =========================================================
    GENERIC REQUEST
 ========================================================= */
 
@@ -21,6 +97,7 @@ async function request(path, options = {}) {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        ...deviceHeaders(),
         ...(options.headers || {}),
       },
     });
@@ -195,13 +272,8 @@ export function getCurrentUser() {
 
 
 export function getPois() {
-  const token = getUserToken();
-
   return request("/api/pois", {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
   });
 }
 
@@ -211,11 +283,6 @@ export function createPoi(poi) {
     "/api/pois",
     {
       method: "POST",
-
-      headers: {
-        Authorization:
-          `Bearer ${getUserToken()}`,
-      },
 
       body: JSON.stringify(poi),
     }
@@ -254,11 +321,6 @@ export function createCheckin({
     {
       method: "POST",
 
-      headers: {
-        Authorization:
-          `Bearer ${getUserToken()}`,
-      },
-
       body: JSON.stringify({
         poiId,
         latitude,
@@ -275,11 +337,6 @@ export function getMyCheckins(
     `/api/checkins?limit=${limit}`,
     {
       method: "GET",
-
-      headers: {
-        Authorization:
-          `Bearer ${getUserToken()}`,
-      },
     }
   );
 }
@@ -302,38 +359,21 @@ export function getTourAuthorization() {
     const authorization =
       JSON.parse(raw);
 
-    const user =
-      getStoredUser();
+    if (!authorization) {
+      return null;
+    }
 
-    /*
-     * Authorization phải thuộc
-     * đúng user hiện tại.
-     */
-    /*
- * Không có authorization thì không có tour.
- */
-if (!authorization) {
-  return null;
-}
+    // Quyền tour thuộc về thiết bị này; mã thiết bị khác thì bỏ.
+    if (
+      authorization.deviceId &&
+      authorization.deviceId !== getDeviceId()
+    ) {
+      localStorage.removeItem(
+        "tour_authorization"
+      );
 
-/*
- * Khi logout, user hiện tại sẽ là null.
- * Không được xóa tour authorization ở thời điểm này.
- *
- * Khi login lại:
- * - đúng user -> giữ tour
- * - user khác -> xóa tour của user cũ
- */
-if (
-  user &&
-  Number(authorization.userId) !== Number(user.id)
-) {
-  localStorage.removeItem(
-    "tour_authorization"
-  );
-
-  return null;
-}
+      return null;
+    }
 
     /*
      * Kiểm tra thời gian hết hạn.
@@ -411,17 +451,8 @@ export function clearTourAuthorization() {
 }
 
 export async function getMySessionAuthorizations() {
-  const token = getUserToken();
-
-  if (!token) {
-    throw new Error("Bạn chưa đăng nhập.");
-  }
-
   return request("/api/sessions/my-authorizations", {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
   });
 }
 
@@ -433,15 +464,6 @@ export async function getMySessionAuthorizations() {
 export async function authorizeSessionByQr(
   qrToken
 ) {
-  const token =
-    getUserToken();
-
-  if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập."
-    );
-  }
-
   let response;
 
   try {
@@ -457,8 +479,7 @@ export async function authorizeSessionByQr(
           "Content-Type":
             "application/json",
 
-          Authorization:
-            `Bearer ${token}`,
+          ...deviceHeaders(),
         },
 
         body: JSON.stringify({
@@ -513,11 +534,6 @@ export function createTourPayment({
     {
       method: "POST",
 
-      headers: {
-        Authorization:
-          `Bearer ${getUserToken()}`,
-      },
-
       body: JSON.stringify({
         sessionId,
         method,
@@ -534,11 +550,6 @@ export function getTourPayment(
     `/api/payments/${sessionId}`,
     {
       method: "GET",
-
-      headers: {
-        Authorization:
-          `Bearer ${getUserToken()}`,
-      },
     }
   );
 }
@@ -551,9 +562,6 @@ export function setDemoTourPaymentResult({
     `/api/payments/${paymentId}/demo-result`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${getUserToken()}`,
-      },
       body: JSON.stringify({ status }),
     }
   );

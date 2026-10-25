@@ -26,11 +26,13 @@ import {
   X,
   XCircle,
   CalendarPlus,
+  Smartphone,
 } from "lucide-react";
 
 import { LANGUAGES } from "@shared/constants/languages";
 import AdminSessions from "./AdminSessions";
 import AdminPayments from "./AdminPayments";
+import AdminDevices from "./AdminDevices";
 
 import {
   createAdminPoi,
@@ -41,6 +43,7 @@ import {
   updateAdminPoi,
   updateAdminUserRole,
   deleteAdminUser,
+  createAdminUser,
 } from "../../services/adminService";
 const API_URL = (
   import.meta.env.VITE_API_URL || ""
@@ -96,7 +99,7 @@ function clonePoiToForm(poi) {
   };
 }
 
-function StatCard({ icon: Icon, label, value }) {
+function StatCard({ icon: Icon, label, value, hint }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -104,6 +107,10 @@ function StatCard({ icon: Icon, label, value }) {
           <p className="text-sm font-medium text-slate-500">{label}</p>
 
           <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+
+          {hint && (
+            <p className="mt-1 text-xs text-slate-400">{hint}</p>
+          )}
         </div>
 
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
@@ -722,6 +729,11 @@ function AdminUsersPanel() {
   const [deletingUser, setDeletingUser] = useState(null);
   const [changingRole, setChangingRole] = useState(null);
 
+  // Trang đăng ký đã bỏ: admin mới chỉ được tạo ở đây.
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [newAdmin, setNewAdmin] = useState({ name: "", email: "", password: "" });
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
+
   const token = localStorage.getItem("admin_token");
   const admin = useMemo(() => {
     try {
@@ -772,6 +784,27 @@ function AdminUsersPanel() {
       window.removeEventListener("admin-users-refresh", handleExternalRefresh);
     };
   }, [search, token]);
+
+  async function handleCreateAdmin(event) {
+    event.preventDefault();
+
+    try {
+      setCreatingAdmin(true);
+      setError("");
+      setSuccess("");
+
+      await createAdminUser(token, newAdmin);
+
+      setSuccess(`Đã tạo tài khoản admin ${newAdmin.email}.`);
+      setNewAdmin({ name: "", email: "", password: "" });
+      setShowCreateAdmin(false);
+      await loadUsers({ silent: true });
+    } catch (err) {
+      setError(err?.message || "Không thể tạo tài khoản admin.");
+    } finally {
+      setCreatingAdmin(false);
+    }
+  }
 
   async function handleSearch(event) {
     event.preventDefault();
@@ -861,15 +894,73 @@ function AdminUsersPanel() {
   return (
     <section className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Users} label="Tổng User" value={users.length} />
+        <StatCard icon={Users} label="Tổng tài khoản" value={users.length} />
 
         <StatCard
           icon={UserRound}
-          label="User thường"
+          label="Tài khoản khách (app mobile)"
           value={normalUserCount}
+          hint="Khách trên web dùng mã thiết bị, không có tài khoản"
         />
 
         <StatCard icon={ShieldCheck} label="Admin" value={adminCount} />
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Thêm admin</h2>
+            <p className="text-sm text-slate-500">
+              Không còn trang đăng ký: tài khoản quản trị mới được tạo tại đây.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreateAdmin((value) => !value)}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            {showCreateAdmin ? "Đóng" : "Thêm admin"}
+          </button>
+        </div>
+
+        {showCreateAdmin && (
+          <form onSubmit={handleCreateAdmin} className="mt-4 grid gap-3 sm:grid-cols-3">
+            <input
+              required
+              value={newAdmin.name}
+              onChange={(event) => setNewAdmin({ ...newAdmin, name: event.target.value })}
+              placeholder="Họ tên"
+              className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+            />
+            <input
+              required
+              type="email"
+              value={newAdmin.email}
+              onChange={(event) => setNewAdmin({ ...newAdmin, email: event.target.value })}
+              placeholder="Email đăng nhập"
+              className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+            />
+            <input
+              required
+              type="password"
+              minLength={8}
+              autoComplete="new-password"
+              value={newAdmin.password}
+              onChange={(event) => setNewAdmin({ ...newAdmin, password: event.target.value })}
+              placeholder="Mật khẩu (ít nhất 8 ký tự)"
+              className="h-11 rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+            />
+            <div className="sm:col-span-3">
+              <button
+                type="submit"
+                disabled={creatingAdmin}
+                className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {creatingAdmin ? "Đang tạo..." : "Tạo tài khoản admin"}
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -1006,7 +1097,10 @@ function AdminUsersPanel() {
                                 {item.name || "Chưa có tên"}
                               </p>
                               <p className="text-xs text-slate-400">
-                                ID #{item.id}
+                                ID #{item.id} · hoạt động:{" "}
+                                {item.last_seen_at
+                                  ? new Date(item.last_seen_at).toLocaleString("vi-VN")
+                                  : "chưa ghi nhận"}
                               </p>
                             </div>
                           </div>
@@ -1024,7 +1118,7 @@ function AdminUsersPanel() {
                                 : "bg-slate-100 text-slate-600"
                             }`}
                           >
-                            {item.role === "admin" ? "ADMIN" : "USER"}
+                            {item.role === "admin" ? "ADMIN" : "KHÁCH (APP)"}
                           </span>
                         </td>
 
@@ -1113,7 +1207,7 @@ function AdminUsersPanel() {
                               : "bg-slate-100 text-slate-600"
                           }`}
                         >
-                          {item.role === "admin" ? "ADMIN" : "USER"}
+                          {item.role === "admin" ? "ADMIN" : "KHÁCH (APP)"}
                         </span>
                       </div>
 
@@ -1186,6 +1280,7 @@ return [
   "users",
   "sessions",
   "payments",
+  "devices",
 ].includes(initialTab)
   ? initialTab
   : "pending";
@@ -1278,7 +1373,8 @@ return [
      if (
     tab === "users" ||
     tab === "sessions" ||
-    tab === "payments"
+    tab === "payments" ||
+    tab === "devices"
   ) {
     return;
   }
@@ -1348,8 +1444,9 @@ return [
     () =>
       ({
         monitoring: "Bảng điều khiển giám sát",
-        users: "Quản lý User",
-        sessions: "Quản lý phiên tham quan",
+        users: "Tài khoản quản trị",
+        devices: "Khách (thiết bị)",
+        sessions: "Tour và QR",
         payments: "Quản lý thanh toán",
         pending: "POI chờ duyệt",
 
@@ -1461,7 +1558,8 @@ return [
               tab !== "monitoring" && 
               tab !== "users" &&
               tab !== "sessions"&&
-              tab !=="payments"
+              tab !=="payments" &&
+              tab !== "devices"
                 ? "bg-slate-900 text-white"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             }`}
@@ -1483,7 +1581,23 @@ return [
             }`}
           >
             <Users size={18} />
-            Quản lý User
+            Tài khoản quản trị
+          </button>
+
+          {/* Khách theo thiết bị */}
+          <button
+            onClick={() => {
+              setTab("devices");
+              setSidebarOpen(false);
+            }}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+              tab === "devices"
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            }`}
+          >
+            <Smartphone size={18} />
+            Khách (thiết bị)
           </button>
             {/* SM*/}
             <button
@@ -1498,7 +1612,7 @@ return [
   }`}
 >
   <CalendarPlus size={18} />
-  Quản lý phiên tham quan
+  Tour và QR
 </button>
 {/* Quản lý thanh toán */}
 <button
@@ -1705,20 +1819,58 @@ return [
                     />
 
                     <StatCard
-                      icon={ShieldCheck}
+                      icon={Globe2}
 
-                      label="Đang hoạt động"
+                      label="Đang trong tour"
 
-                      value={monitoring.stats.activeAuthorizations}
+                      value={monitoring.stats.presence?.inTourNow ?? 0}
+
+                      hint={`Thiết bị mở app trong 2 phút qua · hôm nay: ${monitoring.stats.presence?.joinedToday ?? 0}`}
                     />
 
                     <StatCard
-                      icon={Globe2}
+                      icon={ShieldCheck}
 
-                      label="POI đã duyệt"
+                      label="Có quyền tour"
 
-                      value={monitoring.stats.pois.approved}
+                      value={monitoring.stats.activeAuthorizations}
+
+                      hint="Người dùng có quyền tour còn hiệu lực"
                     />
+                  </section>
+
+                  {/* Đang trong tour theo từng tour */}
+                  <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-700">
+                      Đang trong tour theo từng tour
+                    </p>
+
+                    {(monitoring.stats.presence?.byTour ?? []).length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-500">
+                        Hiện không có thiết bị nào trong tour.
+                      </p>
+                    ) : (
+                      <table className="mt-3 w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-slate-500">
+                            <th className="py-2 font-medium">Tour</th>
+                            <th className="py-2 text-right font-medium">Thiết bị đang dùng</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {monitoring.stats.presence.byTour.map((tour) => (
+                            <tr key={tour.sessionId} className="border-t border-slate-100">
+                              <td className="py-2">
+                                #{tour.sessionId} · {tour.name || "Không tên"}
+                              </td>
+                              <td className="py-2 text-right font-bold">
+                                {tour.inTourNow}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </section>
 
                   {/* POI status */}
@@ -1890,6 +2042,8 @@ return [
             </section>
           ) : tab === "users" ? (
             <AdminUsersPanel />
+          ) : tab === "devices" ? (
+            <AdminDevices />
           ) : tab === "sessions" ? (
             <AdminSessions />
               ) : tab === "payments" ? (

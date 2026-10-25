@@ -426,16 +426,10 @@ if (nextPayment?.status === "paid") {
             </div>
           )}
 
-          {(paymentMethod === "offline" ||
-            !payment ||
-            payment.status === "failed") && (
+          {payment?.status !== "paid" && (
             <button
               type="button"
-              disabled={
-                loading ||
-                (paymentMethod === "online" &&
-                  payment?.status === "pending")
-              }
+              disabled={loading}
               onClick={() => void handleCreatePayment()}
               className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#2196F3] px-5 py-3.5 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -449,7 +443,9 @@ if (nextPayment?.status === "paid") {
                 ? "Đang tạo yêu cầu..."
                 : paymentMethod === "offline"
                   ? "Tạo yêu cầu thanh toán tiền mặt"
-                  : "Tạo yêu cầu thanh toán online"}
+                  : payment?.status === "pending" && payment?.method === "online"
+                    ? "Thanh toán lại với VNPAY"
+                    : "Thanh toán online qua VNPAY"}
             </button>
           )}
         </div>

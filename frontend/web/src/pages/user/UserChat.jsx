@@ -23,7 +23,6 @@ import {
   chatWithAgent,
 } from "../../services/agentService";
 import {
-  getUserToken,
 } from "../../services/userService";
 
 /* =========================================================
@@ -258,18 +257,6 @@ export default function UserChat() {
       return;
     }
 
-    const token = getUserToken();
-
-    if (!token) {
-      setError(
-        language === "vi"
-          ? "Bạn cần đăng nhập để sử dụng AI Agent."
-          : "You need to log in to use the AI Agent."
-      );
-
-      return;
-    }
-
     setError("");
 
     const userMessage = {
@@ -292,7 +279,7 @@ export default function UserChat() {
     try {
       const result =
         await chatWithAgent(
-          token,
+          null,
           question,
           language
         );

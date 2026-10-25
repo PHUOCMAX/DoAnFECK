@@ -11,7 +11,7 @@ import {
 import {
   getPois,
   getTourAuthorization,
-  getUserToken,
+  getDeviceId,
 } from "../services/userService";
 
 const PoiContext = createContext(null);
@@ -54,8 +54,6 @@ export function PoiProvider({ children }) {
 
   const loadPois = useCallback(
     async (force = false) => {
-      const token = getUserToken();
-
       const tourAuthorization =
         getTourAuthorization();
 
@@ -65,7 +63,6 @@ export function PoiProvider({ children }) {
        * => tuyệt đối không load POI.
        */
       if (
-        !token ||
         tourAuthorization?.status !==
           "active" ||
         !tourAuthorization?.sessionId
@@ -78,7 +75,7 @@ export function PoiProvider({ children }) {
        * Mỗi token + session là một bộ dữ liệu riêng.
        */
       const loadKey =
-        `${token}:${tourAuthorization.sessionId}`;
+        `${getDeviceId()}:${tourAuthorization.sessionId}`;
 
       /*
        * Đã load bộ dữ liệu này rồi

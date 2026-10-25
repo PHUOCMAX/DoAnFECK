@@ -1,6 +1,7 @@
 import express from "express";
 
 import {
+  createAdminAccount,
   listAdminUsers,
   updateAdminUserRole,
   deleteAdminUser,
@@ -14,6 +15,7 @@ const router = express.Router();
 router.use(requireAuth, requireAdmin);
 
 router.get("/", listAdminUsers);
+router.post("/", createAdminAccount);
 
 router.patch("/:userId/role", updateAdminUserRole);
 
