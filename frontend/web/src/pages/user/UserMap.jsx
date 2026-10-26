@@ -619,9 +619,9 @@ function MapTilerView({
           </p>
 
           <p className="mt-2 text-sm text-slate-500">
-            Kiểm tra VITE_MAPTILER_KEY trong
-            Vercel → Settings → Environment Variables.
-            Sau khi thay đổi biến, phải redeploy frontend.
+            Kiểm tra VITE_MAPTILER_KEY trong file .env
+            ở thư mục gốc, rồi build lại frontend
+            (docker compose up -d --build frontend).
           </p>
         </div>
       </div>

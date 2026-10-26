@@ -2,10 +2,10 @@ const key = String(process.env.VITE_MAPTILER_KEY ?? "").trim();
 
 if (!key) {
   console.error(
-    "[MapTiler] VITE_MAPTILER_KEY is missing from the Vercel build environment."
+    "[MapTiler] VITE_MAPTILER_KEY is missing from the build environment."
   );
   console.error(
-    "[MapTiler] Enable the variable for Production in Vercel, then redeploy."
+    "[MapTiler] Set it in the root .env (Docker) or the CI secrets, then rebuild."
   );
   process.exit(1);
 }
