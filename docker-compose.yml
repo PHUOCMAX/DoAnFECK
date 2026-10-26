@@ -67,7 +67,7 @@ services:
 
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   qdrant:
     image: qdrant/qdrant:latest

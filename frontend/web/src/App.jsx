@@ -11,7 +11,6 @@ import { useEffect, useState } from "react";
 
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminUsers from "./pages/admin/AdminUsers";
 
 import UserHome from "./pages/user/UserHome";
 import UserExplore from "./pages/user/UserExplore";
@@ -210,11 +209,6 @@ function App() {
           <Route
             path="/admin"
             element={<AdminDashboard />}
-          />
-
-          <Route
-            path="/admin/users"
-            element={<AdminUsers />}
           />
 
           {/* =================================================
