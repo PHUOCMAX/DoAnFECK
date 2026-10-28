@@ -607,6 +607,14 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
   );
 }
 
+// Khoảng thời gian cho số liệu phát sinh trên dashboard (theo giờ Việt Nam).
+const MONITORING_RANGES = [
+  { value: "today", label: "Hôm nay" },
+  { value: "7d", label: "7 ngày" },
+  { value: "month", label: "Tháng này" },
+  { value: "all", label: "Tất cả" },
+];
+
 function PoiCard({ poi, onEdit, onDelete, onReview, onRegenerateAudio }) {
   const [audioQueued, setAudioQueued] = useState(false);
 
@@ -1349,6 +1357,12 @@ return [
 
   const [monitoringError, setMonitoringError] = useState("");
 
+  const [monitoringRange, setMonitoringRange] = useState("all");
+
+  const rangeLabel = MONITORING_RANGES.find(
+    (item) => item.value === monitoringRange,
+  )?.label;
+
   const token = localStorage.getItem("admin_token");
 
   const user = JSON.parse(localStorage.getItem("admin_user") || "null");
@@ -1386,7 +1400,7 @@ return [
 
     try {
       const response = await fetch(
-  `${API_URL}/api/admin/monitoring`,
+        `${API_URL}/api/admin/monitoring?range=${monitoringRange}`,
 
         {
           headers: {
@@ -1427,7 +1441,7 @@ return [
   }
 
     loadPois(tab);
-  }, [tab]);
+  }, [tab, monitoringRange]);
 
   useEffect(() => {
     if (tab !== "monitoring") {
@@ -1439,7 +1453,7 @@ return [
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [tab]);
+  }, [tab, monitoringRange]);
 
   async function handleReview(id, status) {
     try {
@@ -1826,6 +1840,35 @@ return [
                 </div>
               ) : monitoring ? (
                 <>
+                  {/* Range filter */}
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-slate-500">
+                      Tour, thanh toán, doanh thu và check-in tính theo:{" "}
+                      <span className="font-semibold text-slate-800">{rangeLabel}</span>
+                    </p>
+
+                    <div className="inline-flex w-full rounded-xl border border-slate-200 bg-white p-1 sm:w-auto">
+                      {MONITORING_RANGES.map((item) => (
+                        <button
+                          key={item.value}
+
+                          type="button"
+
+                          onClick={() => setMonitoringRange(item.value)}
+
+                          className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition sm:flex-none ${
+                            monitoringRange === item.value
+                              ? "bg-slate-900 text-white"
+                              : "text-slate-600 hover:bg-slate-100"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Overview */}
 
                   <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1850,6 +1893,8 @@ return [
 
                       label="Sessions"
 
+                      hint={rangeLabel}
+
                       value={monitoring.stats.sessions.total}
                     />
 
@@ -1857,6 +1902,8 @@ return [
                       icon={CreditCard}
 
                       label="Thanh toán"
+
+                      hint={rangeLabel}
 
                       value={monitoring.stats.payments.total}
                     />
@@ -1867,12 +1914,16 @@ return [
                       label="Doanh thu"
 
                       value={`${monitoring.stats.revenue.toLocaleString("vi-VN")} ₫`}
+
+                      hint={rangeLabel}
                     />
 
                     <StatCard
                       icon={Activity}
 
                       label="Check-ins"
+
+                      hint={rangeLabel}
 
                       value={monitoring.stats.checkins.total}
                     />
