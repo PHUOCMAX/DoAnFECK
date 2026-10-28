@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import {
   ArrowLeft,
   Headphones,
@@ -13,9 +13,11 @@ import { useLanguage } from "../../i18n";
 import { usePoiStore } from "../../stores/PoiProvider";
 
 import {
-  speakText,
-  stopSpeaking,
-} from "../../utils/tts";
+  hasPoiAudio,
+  playPoiNarration,
+  stopNarration,
+  useNarratingPoiId,
+} from "../../services/narrationService";
 
 import { resolveAssetUrl } from "../../services/userService";
 
@@ -25,12 +27,13 @@ export default function PoiDetail() {
   const { language, t } = useLanguage();
   const { getPoiById } = usePoiStore();
 
-  const [speaking, setSpeaking] = useState(false);
-
-  const autoPlayedRef = useRef(false);
-  const audioRef = useRef(null);
-
   const poi = getPoiById(id);
+
+  const speaking =
+    useNarratingPoiId() === Number(id);
+
+  const hasAudio =
+    hasPoiAudio(poi, language);
 
   const name =
     poi?.name?.[language] ||
@@ -45,173 +48,32 @@ export default function PoiDetail() {
     "";
 
   /*
-   * Dừng audio khi rời khỏi trang.
+   * Mở trang POI thì đọc thuyết minh (audio pipeline),
+   * rời trang hoặc đổi ngôn ngữ thì dừng.
    */
   useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-        } catch {
-          // ignore
-        }
-
-        audioRef.current = null;
-      }
-
-      stopSpeaking();
-    };
-  }, []);
-
-  /*
-   * Reset trạng thái khi đổi POI hoặc ngôn ngữ.
-   */
-  useEffect(() => {
-    autoPlayedRef.current = false;
-    setSpeaking(false);
-  }, [id, language]);
-
-  /*
-   * Đọc POI tự động khi trang POI được mở.
-   *
-   * Ưu tiên:
-   * 1. Audio upload từ backend
-   * 2. TTS nếu không có audio
-   */
-  useEffect(() => {
-    if (!poi || !desc) {
-      return;
+    if (!poi) {
+      return undefined;
     }
-
-    if (autoPlayedRef.current) {
-      return;
-    }
-
-    autoPlayedRef.current = true;
 
     const timer = setTimeout(() => {
-      playNarration();
+      playPoiNarration(poi, language);
     }, 700);
 
     return () => {
       clearTimeout(timer);
+      stopNarration();
     };
-  }, [poi, id, language, desc]);
-
-  function stopAudio() {
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      } catch {
-        // ignore
-      }
-
-      audioRef.current = null;
-    }
-  }
-
-  function playNarration() {
-    if (!poi || !desc) {
-      return;
-    }
-
-    stopAudio();
-    stopSpeaking();
-
-    /*
-     * Audio được upload cho ngôn ngữ hiện tại.
-     */
-    const audioSource =
-      poi.audio?.[language];
-
-    if (audioSource) {
-      const audioUrl =
-        resolveAssetUrl(audioSource);
-
-      console.log(
-        "POI AUTO AUDIO:",
-        audioUrl
-      );
-
-      const audio = new Audio(audioUrl);
-
-      audioRef.current = audio;
-
-      audio.onplay = () => {
-        setSpeaking(true);
-      };
-
-      audio.onended = () => {
-        audioRef.current = null;
-        setSpeaking(false);
-      };
-
-      audio.onerror = () => {
-        console.warn(
-          "POI audio không phát được, chuyển sang TTS."
-        );
-
-        audioRef.current = null;
-
-        playTts();
-      };
-
-      audio
-        .play()
-        .catch((error) => {
-          console.warn(
-            "POI audio bị browser chặn:",
-            error
-          );
-
-          audioRef.current = null;
-
-          playTts();
-        });
-
-      return;
-    }
-
-    /*
-     * Không có audio → TTS.
-     */
-    playTts();
-  }
-
-  function playTts() {
-    if (!desc) {
-      return;
-    }
-
-    console.log(
-      "POI AUTO TTS:",
-      language,
-      desc
-    );
-
-    const started = speakText(
-      desc,
-      language,
-      {
-        rate: 0.95,
-        pitch: 1,
-        volume: 1,
-      }
-    );
-
-    setSpeaking(Boolean(started));
-  }
+    // Chỉ chạy lại khi đổi POI hoặc ngôn ngữ, không phải mỗi lần store cập nhật.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, language, Boolean(poi)]);
 
   function speak() {
-    playNarration();
+    playPoiNarration(poi, language);
   }
 
   function stop() {
-    stopAudio();
-    stopSpeaking();
-    setSpeaking(false);
+    stopNarration();
   }
 
   if (!poi) {
@@ -315,7 +177,7 @@ export default function PoiDetail() {
                 onClick={
                   speaking ? stop : speak
                 }
-                disabled={!desc}
+                disabled={!hasAudio}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#2196f3] px-5 py-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {speaking ? (

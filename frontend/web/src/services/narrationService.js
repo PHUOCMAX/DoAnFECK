@@ -1,17 +1,23 @@
+import { useSyncExternalStore } from "react";
+
 import {
   resolveAssetUrl,
 } from "./userService";
 
-import {
-  speakText,
-  stopSpeaking,
-} from "../utils/tts";
+/*
+ * Một kênh phát duy nhất cho toàn app: thuyết minh tự động (geofence)
+ * và nút "Nghe" ở mọi trang đều đi qua đây, nên không bao giờ có hai
+ * giọng đọc cùng lúc.
+ *
+ * Chỉ phát file mp3 do pipeline tạo sẵn (Edge TTS) để giọng đọc luôn
+ * giống nhau trên mọi điện thoại; POI chưa có audio thì bỏ qua.
+ */
 
 let currentAudio = null;
 
-let narrationQueue = [];
+let currentPoiId = null;
 
-let isPlaying = false;
+let narrationQueue = [];
 
 /*
  * Dùng để ngăn callback cũ tác động
@@ -19,26 +25,46 @@ let isPlaying = false;
  */
 let narrationRunId = 0;
 
-function getPoiText(
-  poi,
-  language
-) {
-  return (
-    poi?.description?.[language] ||
-    poi?.description?.vi ||
-    poi?.description?.en ||
-    ""
-  ).trim();
+/*
+ * Mục đang chờ người dùng chạm màn hình vì trình duyệt
+ * chặn tự phát âm thanh.
+ */
+let blockedItem = null;
+
+const listeners = new Set();
+
+function notify() {
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
-function getPoiAudio(
+function setCurrentPoiId(poiId) {
+  currentPoiId = poiId;
+  notify();
+}
+
+export function getPoiAudioUrl(
   poi,
   language
 ) {
-  return (
+  const source = (
     poi?.audio?.[language] ||
     ""
   ).trim();
+
+  return source
+    ? resolveAssetUrl(source)
+    : "";
+}
+
+export function hasPoiAudio(
+  poi,
+  language
+) {
+  return Boolean(
+    getPoiAudioUrl(poi, language)
+  );
 }
 
 function cleanupCurrentAudio() {
@@ -64,248 +90,145 @@ function cleanupCurrentAudio() {
 
 /*
  * ==========================================
- * PLAY NEXT
+ * CHỜ NGƯỜI DÙNG CHẠM MÀN HÌNH
  * ==========================================
  */
-async function playNext() {
-  if (isPlaying) {
+function retryBlockedOnTap() {
+  document.removeEventListener(
+    "pointerdown",
+    retryBlockedOnTap
+  );
+
+  const item = blockedItem;
+
+  blockedItem = null;
+
+  if (item && !currentAudio) {
+    void startItem(item);
+  }
+}
+
+function waitForTap(item) {
+  blockedItem = item;
+
+  document.addEventListener(
+    "pointerdown",
+    retryBlockedOnTap,
+    { once: true }
+  );
+}
+
+/*
+ * ==========================================
+ * PHÁT MỘT POI
+ * ==========================================
+ */
+async function startItem({
+  poi,
+  language,
+}) {
+  const audioUrl =
+    getPoiAudioUrl(poi, language);
+
+  if (!audioUrl) {
+    console.warn(
+      "NARRATION: POI chưa có audio, bỏ qua.",
+      poi?.id,
+      language
+    );
+
+    playNext();
+
+    return;
+  }
+
+  const runId = narrationRunId;
+
+  const audio = new Audio(audioUrl);
+
+  audio.preload = "auto";
+
+  currentAudio = audio;
+
+  setCurrentPoiId(Number(poi.id));
+
+  const finish = () => {
+    if (runId !== narrationRunId) {
+      return;
+    }
+
+    cleanupCurrentAudio();
+
+    setCurrentPoiId(null);
+
+    playNext();
+  };
+
+  audio.onended = finish;
+
+  audio.onerror = () => {
+    console.warn(
+      "NARRATION: không tải được audio.",
+      audioUrl
+    );
+
+    finish();
+  };
+
+  try {
+    await audio.play();
+
+    /*
+     * Có thể narration đã bị stop trong lúc
+     * browser xử lý play().
+     */
+    if (runId !== narrationRunId) {
+      cleanupCurrentAudio();
+    }
+  } catch (error) {
+    if (runId !== narrationRunId) {
+      return;
+    }
+
+    cleanupCurrentAudio();
+
+    setCurrentPoiId(null);
+
+    if (error?.name === "NotAllowedError") {
+      /*
+       * Trình duyệt (nhất là Safari trên iPhone) chặn tự phát:
+       * phát lại ngay khi người dùng chạm màn hình.
+       */
+      waitForTap({ poi, language });
+
+      return;
+    }
+
+    console.warn(
+      "NARRATION: phát audio thất bại.",
+      error
+    );
+
+    playNext();
+  }
+}
+
+function playNext() {
+  if (currentAudio) {
     return;
   }
 
   const next =
     narrationQueue.shift();
 
-  if (!next) {
-    return;
+  if (next) {
+    void startItem(next);
   }
-
-  isPlaying = true;
-
-  const runId =
-    narrationRunId;
-
-  const {
-    poi,
-    language,
-  } = next;
-
-  const audioSource =
-    getPoiAudio(
-      poi,
-      language
-    );
-
-  /*
-   * ========================================
-   * ƯU TIÊN PIPELINE AUDIO
-   * ========================================
-   */
-  if (audioSource) {
-    const audioUrl =
-      resolveAssetUrl(
-        audioSource
-      );
-
-    const audio =
-      new Audio(audioUrl);
-
-    currentAudio = audio;
-
-    audio.preload = "auto";
-
-    /*
-     * Đánh dấu audio đã thực sự bắt đầu.
-     *
-     * Một khi play() đã resolve thì KHÔNG
-     * fallback sang Browser TTS nữa, kể cả
-     * sau đó audio phát sinh error.
-     */
-    let playbackStarted = false;
-
-    /*
-     * Ngăn fallback chạy nhiều lần.
-     */
-    let fallbackStarted = false;
-
-    const playBrowserTtsOnce =
-      () => {
-        if (
-          fallbackStarted ||
-          playbackStarted
-        ) {
-          return;
-        }
-
-        fallbackStarted = true;
-
-        cleanupCurrentAudio();
-
-        playBrowserTts(
-          poi,
-          language,
-          runId
-        );
-      };
-
-    audio.onended = () => {
-      if (
-        runId !== narrationRunId
-      ) {
-        return;
-      }
-
-      cleanupCurrentAudio();
-
-      isPlaying = false;
-
-      void playNext();
-    };
-
-    audio.onerror = () => {
-      console.warn(
-        "POI pipeline audio error."
-      );
-
-      /*
-       * Chỉ fallback TTS nếu
-       * pipeline audio chưa bắt đầu.
-       *
-       * Nếu audio đã phát rồi thì
-       * KHÔNG đọc lại bằng TTS.
-       */
-      if (!playbackStarted) {
-        playBrowserTtsOnce();
-      }
-    };
-
-    try {
-      await audio.play();
-
-      /*
-       * play() đã resolve:
-       * pipeline audio đã bắt đầu chạy.
-       */
-      playbackStarted = true;
-
-      /*
-       * Có thể narration đã bị stop trong lúc
-       * browser xử lý play().
-       */
-      if (
-        runId !== narrationRunId
-      ) {
-        cleanupCurrentAudio();
-      }
-
-      return;
-    } catch (error) {
-      console.warn(
-        "Pipeline audio playback failed:",
-        error
-      );
-
-      /*
-       * play() thất bại trước khi audio
-       * bắt đầu → mới được fallback TTS.
-       */
-      playBrowserTtsOnce();
-
-      return;
-    }
-  }
-
-  /*
-   * ========================================
-   * KHÔNG CÓ PIPELINE AUDIO
-   * ========================================
-   */
-  playBrowserTts(
-    poi,
-    language,
-    runId
-  );
 }
 
 /*
  * ==========================================
- * BROWSER TTS
- * ==========================================
- */
-function playBrowserTts(
-  poi,
-  language,
-  runId = narrationRunId
-) {
-  if (
-    runId !== narrationRunId
-  ) {
-    return;
-  }
-
-  const text =
-    getPoiText(
-      poi,
-      language
-    );
-
-  if (!text) {
-    isPlaying = false;
-
-    void playNext();
-
-    return;
-  }
-
-  stopSpeaking();
-
-  const started =
-    speakText(
-      text,
-      language,
-      {
-        rate: 0.95,
-        pitch: 1,
-        volume: 1,
-      }
-    );
-
-  if (!started) {
-    isPlaying = false;
-
-    void playNext();
-
-    return;
-  }
-
-  const estimatedDuration =
-    Math.max(
-      2500,
-      Math.min(
-        30000,
-        text.length * 65
-      )
-    );
-
-  window.setTimeout(() => {
-    if (
-      runId !== narrationRunId
-    ) {
-      return;
-    }
-
-    if (!isPlaying) {
-      return;
-    }
-
-    isPlaying = false;
-
-    void playNext();
-  }, estimatedDuration);
-}
-
-/*
- * ==========================================
- * QUEUE NARRATION
+ * QUEUE NARRATION (geofence)
  * ==========================================
  */
 export function enqueuePoiNarration(
@@ -320,6 +243,7 @@ export function enqueuePoiNarration(
     Number(poi.id);
 
   const alreadyQueued =
+    currentPoiId === poiId ||
     narrationQueue.some(
       (item) =>
         Number(item.poi?.id) ===
@@ -343,7 +267,30 @@ export function enqueuePoiNarration(
     poiId
   );
 
-  void playNext();
+  playNext();
+}
+
+/*
+ * ==========================================
+ * NÚT "NGHE": phát ngay POI này
+ * ==========================================
+ */
+export function playPoiNarration(
+  poi,
+  language
+) {
+  stopNarration();
+
+  if (!hasPoiAudio(poi, language)) {
+    return false;
+  }
+
+  void startItem({
+    poi,
+    language,
+  });
+
+  return true;
 }
 
 /*
@@ -360,9 +307,32 @@ export function stopNarration() {
 
   narrationQueue = [];
 
+  blockedItem = null;
+
+  document.removeEventListener(
+    "pointerdown",
+    retryBlockedOnTap
+  );
+
   cleanupCurrentAudio();
 
-  stopSpeaking();
+  setCurrentPoiId(null);
+}
 
-  isPlaying = false;
+/*
+ * ==========================================
+ * HOOK: POI nào đang được đọc
+ * ==========================================
+ */
+function subscribe(listener) {
+  listeners.add(listener);
+
+  return () => listeners.delete(listener);
+}
+
+export function useNarratingPoiId() {
+  return useSyncExternalStore(
+    subscribe,
+    () => currentPoiId
+  );
 }

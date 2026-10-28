@@ -9,6 +9,7 @@ import {
   PlusCircle,
   QrCode,
   Search,
+  Square,
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
@@ -16,14 +17,14 @@ import { Link } from "react-router-dom";
 import UserLayout from "../../components/user/UserLayout";
 import { useLanguage } from "../../i18n";
 import { usePoiStore } from "../../stores/PoiProvider";
-import { speakText } from "../../utils/tts";
 import { resolveAssetUrl } from "../../services/userService";
+import {
+  hasPoiAudio,
+  playPoiNarration,
+  stopNarration,
+  useNarratingPoiId,
+} from "../../services/narrationService";
 
-function speak(text, language) {
-  speakText(text, language, {
-    rate: 0.95,
-  });
-}
 
 export default function UserHome() {
   const { language, t } = useLanguage();
@@ -35,6 +36,17 @@ export default function UserHome() {
   } = usePoiStore();
 
   const [query, setQuery] = useState("");
+
+  const narratingPoiId = useNarratingPoiId();
+
+  function toggleListen(poi) {
+    if (narratingPoiId === Number(poi.id)) {
+      stopNarration();
+      return;
+    }
+
+    playPoiNarration(poi, language);
+  }
 
   const filtered = useMemo(() => {
     if (!authorized) {
@@ -300,23 +312,17 @@ export default function UserHome() {
 
                           <button
                             type="button"
-                            onClick={() =>
-                              speak(
-                                p.description?.[
-                                  language
-                                ] ||
-                                  p.description?.vi ||
-                                  "",
-                                language
-                              )
-                            }
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f7fa] px-3 py-2 text-xs font-extrabold text-[#555]"
+                            onClick={() => toggleListen(p)}
+                            disabled={!hasPoiAudio(p, language)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f7fa] px-3 py-2 text-xs font-extrabold text-[#555] disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <Headphones
-                              size={14}
-                            />
+                            {narratingPoiId === Number(p.id) ? (
+                              <Square size={14} />
+                            ) : (
+                              <Headphones size={14} />
+                            )}
 
-                            {t.listen}
+                            {narratingPoiId === Number(p.id) ? t.stop : t.listen}
                           </button>
                         </div>
                       </div>

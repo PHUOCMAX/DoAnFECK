@@ -29,6 +29,9 @@ services:
       LIBRETRANSLATE_URL: http://libretranslate:5000
     ports:
       - "5001:5001"
+    volumes:
+      # Ảnh POI và audio do pipeline tạo: giữ lại khi build lại container.
+      - ./backend/uploads:/app/uploads
     depends_on:
       - mysql
       - qdrant

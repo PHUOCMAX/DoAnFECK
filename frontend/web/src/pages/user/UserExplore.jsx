@@ -1,20 +1,27 @@
-import { speakText } from "../../utils/tts";
 import { useMemo, useState } from "react";
 import {
   Headphones,
   MapPin,
   Search,
   SlidersHorizontal,
+  Square,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import UserLayout from "../../components/user/UserLayout";
 import { useLanguage } from "../../i18n";
 import { usePoiStore } from "../../stores/PoiProvider";
 import { resolveAssetUrl } from "../../services/userService";
+import {
+  hasPoiAudio,
+  playPoiNarration,
+  stopNarration,
+  useNarratingPoiId,
+} from "../../services/narrationService";
 
 export default function UserExplore() {
   const { language, t } = useLanguage();
   const { pois } = usePoiStore();
+  const narratingPoiId = useNarratingPoiId();
 
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
@@ -47,12 +54,13 @@ export default function UserExplore() {
     });
   }, [pois, q, category, language]);
 
-  function speak(text) {
-    if (!text) return;
+  function toggleListen(poi) {
+    if (narratingPoiId === Number(poi.id)) {
+      stopNarration();
+      return;
+    }
 
-    speakText(text, language, {
-      rate: 0.95,
-    });
+    playPoiNarration(poi, language);
   }
 
   return (
@@ -197,12 +205,16 @@ export default function UserExplore() {
 
                       <button
                         type="button"
-                        onClick={() => speak(description)}
-                        disabled={!description}
+                        onClick={() => toggleListen(p)}
+                        disabled={!hasPoiAudio(p, language)}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#f5f7fa] px-3 py-2 text-xs font-extrabold text-[#555] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Headphones size={14} />
-                        {t.listen}
+                        {narratingPoiId === Number(p.id) ? (
+                          <Square size={14} />
+                        ) : (
+                          <Headphones size={14} />
+                        )}
+                        {narratingPoiId === Number(p.id) ? t.stop : t.listen}
                       </button>
                     </div>
                   </div>
