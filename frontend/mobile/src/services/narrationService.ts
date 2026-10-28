@@ -6,10 +6,11 @@ import {
 import type { LanguageCode } from "../translations";
 import type { Poi } from "../store/usePoiStore";
 
-import {
-  speakText,
-  stopSpeaking,
-} from "./nativeTts";
+/*
+ * Một kênh phát duy nhất: chỉ phát file mp3 do pipeline tạo sẵn
+ * (Edge TTS) để giọng đọc giống nhau trên mọi máy; POI chưa có
+ * audio thì bỏ qua, không dùng giọng đọc của điện thoại.
+ */
 
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL?.replace(
@@ -60,25 +61,6 @@ function resolveAudioUrl(
   return `${API_URL}/${value}`;
 }
 
-function getLocalizedValue(
-  values:
-    | Record<string, string>
-    | null
-    | undefined,
-  language: LanguageCode
-) {
-  if (!values) {
-    return "";
-  }
-
-  return (
-    values[language] ??
-    values.vi ??
-    Object.values(values)[0] ??
-    ""
-  );
-}
-
 function cleanupCurrentPlayer() {
   try {
     currentSubscription?.remove();
@@ -114,34 +96,12 @@ function cleanupCurrentPlayer() {
   currentPlayer = null;
 }
 
-function fallbackToTts(
-  poi: Poi,
-  language: LanguageCode,
-  token: number
+export function hasPoiAudio(
+  poi: Poi | null | undefined,
+  language: LanguageCode
 ) {
-  if (token !== narrationToken) {
-    return;
-  }
-
-  cleanupCurrentPlayer();
-
-  const description =
-    getLocalizedValue(
-      poi.description,
-      language
-    );
-
-  if (!description) {
-    return;
-  }
-
-  console.log(
-    "[Narration] fallback -> Native TTS"
-  );
-
-  speakText(
-    description,
-    language
+  return Boolean(
+    resolveAudioUrl(poi?.audio?.[language])
   );
 }
 
@@ -152,48 +112,19 @@ export async function playPoiNarration(
   const token = ++narrationToken;
 
   cleanupCurrentPlayer();
-  stopSpeaking();
 
-  const audioSource =
-    getLocalizedValue(
-      poi.audio,
-      language
-    );
-
-  const description =
-    getLocalizedValue(
-      poi.description,
-      language
-    );
-
-  /*
-   * Không có audio thì dùng native TTS.
-   */
-  if (!audioSource) {
-    console.log(
-      "[Narration] no pre-generated audio -> TTS"
-    );
-
-    if (description) {
-      speakText(
-        description,
-        language
-      );
-    }
-
-    return;
-  }
-
-  const audioUrl =
-    resolveAudioUrl(audioSource);
+  const audioUrl = resolveAudioUrl(
+    poi.audio?.[language]
+  );
 
   if (!audioUrl) {
-    fallbackToTts(
-      poi,
-      language,
-      token
+    console.warn(
+      "[Narration] POI chưa có audio, bỏ qua:",
+      poi.id,
+      language
     );
-    return;
+
+    return false;
   }
 
   console.log(
@@ -224,7 +155,7 @@ export async function playPoiNarration(
   }
 
   if (token !== narrationToken) {
-    return;
+    return false;
   }
 
   try {
@@ -240,18 +171,14 @@ export async function playPoiNarration(
     let started = false;
     let finished = false;
 
-    const fallback = () => {
+    const fail = () => {
       if (finished) {
         return;
       }
 
       finished = true;
 
-      fallbackToTts(
-        poi,
-        language,
-        token
-      );
+      cleanupCurrentPlayer();
     };
 
     const subscription =
@@ -268,7 +195,7 @@ export async function playPoiNarration(
               status.error
             );
 
-            fallback();
+            fail();
             return;
           }
 
@@ -319,17 +246,16 @@ export async function playPoiNarration(
       error
     );
 
-    fallbackToTts(
-      poi,
-      language,
-      token
-    );
+    cleanupCurrentPlayer();
+
+    return false;
   }
+
+  return true;
 }
 
 export function stopPoiNarration() {
   narrationToken += 1;
 
   cleanupCurrentPlayer();
-  stopSpeaking();
 }

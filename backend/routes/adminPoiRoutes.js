@@ -3,6 +3,7 @@ import express from "express";
 import {
   createAdminPoi,
   deleteAdminPoi,
+  regeneratePoiAudio,
   updateAdminPoi,
 } from "../controllers/adminPoiController.js";
 
@@ -50,6 +51,11 @@ router.patch(
 router.patch(
   "/pois/:poiId/status",
   reviewPoi
+);
+
+router.post(
+  "/pois/:poiId/audio",
+  regeneratePoiAudio
 );
 
 router.delete(

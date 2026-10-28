@@ -170,3 +170,21 @@ export function grantDeviceAccess(token, deviceId, sessionId) {
     body: JSON.stringify({ sessionId }),
   });
 }
+
+export function revokeDeviceAccess(token, deviceId) {
+  return request(`/api/admin/devices/${deviceId}/revoke`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export function regeneratePoiAudio(token, poiId) {
+  return request(`/api/admin/pois/${poiId}/audio`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}

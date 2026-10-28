@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { KeyRound, RefreshCw, Search, Smartphone } from "lucide-react";
+import { Ban, KeyRound, RefreshCw, Search, Smartphone } from "lucide-react";
 
 import {
   getAdminDevices,
   grantDeviceAccess,
+  revokeDeviceAccess,
 } from "../../services/adminService";
 
 /*
@@ -120,6 +121,31 @@ export default function AdminDevices() {
     try {
       await grantDeviceAccess(token, device.deviceId, defaultTour.id);
       setNotice(`Đã cấp quyền tour cho thiết bị ${device.shortCode}. Khách tải lại trang là vào được.`);
+      await load(query);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGrantingId(null);
+    }
+  }
+
+  async function revoke(device) {
+    const confirmed = window.confirm(
+      `Thu hồi quyền tour của thiết bị ${device.shortCode}? ` +
+        "Khách sẽ phải quét QR và thanh toán lại để vào tour."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setGrantingId(device.deviceId);
+    setError("");
+    setNotice("");
+
+    try {
+      await revokeDeviceAccess(token, device.deviceId);
+      setNotice(`Đã thu hồi quyền tour của thiết bị ${device.shortCode}.`);
       await load(query);
     } catch (err) {
       setError(err.message);
@@ -253,7 +279,7 @@ export default function AdminDevices() {
                       {formatTime(device.lastSeenInTour || device.lastActivity)}
                     </td>
 
-                    <td className="px-5 py-4 text-right">
+                    <td className="whitespace-nowrap px-5 py-4 text-right">
                       <button
                         type="button"
                         disabled={grantingId === device.deviceId}
@@ -263,6 +289,18 @@ export default function AdminDevices() {
                         <KeyRound size={14} />
                         Cấp lại quyền
                       </button>
+
+                      {device.access && (
+                        <button
+                          type="button"
+                          disabled={grantingId === device.deviceId}
+                          onClick={() => void revoke(device)}
+                          className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Ban size={14} />
+                          Thu hồi
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

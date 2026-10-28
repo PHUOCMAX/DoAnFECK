@@ -1012,7 +1012,11 @@ async function getMonitoringStats(req, res, next) {
             WHEN last_seen_at >= NOW() - INTERVAL 2 MINUTE THEN device_id
           END) AS in_tour_now,
           COUNT(DISTINCT CASE
-            WHEN joined_at >= CURDATE() THEN device_id
+            WHEN last_seen_at >= CONVERT_TZ(
+              DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00')),
+              '+07:00',
+              '+00:00'
+            ) THEN device_id
           END) AS joined_today
         FROM tour_presence
       `),
@@ -1085,7 +1089,7 @@ async function getMonitoringStats(req, res, next) {
       recentPayments: recentPayments.map(
         (payment) => ({
           id: Number(payment.id),
-          userId: Number(payment.user_id),
+          userId: payment.user_id ? Number(payment.user_id) : null,
           sessionId: Number(payment.session_id),
           amount: Number(payment.amount),
           method: payment.method,
@@ -1111,7 +1115,9 @@ async function getMonitoringStats(req, res, next) {
 
 export function createApp() {
   const app = express();
-  app.set("trust proxy", "172.18.0.6");
+  // Chỉ tin X-Forwarded-For từ proxy trong mạng nội bộ (nginx trong Docker),
+  // không phụ thuộc IP cụ thể mà Docker cấp cho container.
+  app.set("trust proxy", "loopback, uniquelocal");
 
   app.disable("x-powered-by");
 

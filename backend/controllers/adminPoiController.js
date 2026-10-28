@@ -759,3 +759,57 @@ export async function deleteAdminPoi(
     return next(error);
   }
 }
+/* =========================================================
+   REGENERATE AUDIO
+========================================================= */
+
+/*
+ * POST /api/admin/pois/:poiId/audio
+ * Chạy lại pipeline audio cho POI: chỉ tạo các ngôn ngữ còn thiếu
+ * file mp3, file đã có thì giữ nguyên. Chạy nền, trả về ngay.
+ */
+export async function regeneratePoiAudio(
+  req,
+  res,
+  next
+) {
+  const poiId =
+    Number(req.params.poiId);
+
+  if (
+    !Number.isInteger(poiId) ||
+    poiId < 1
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "ID POI không hợp lệ.",
+    });
+  }
+
+  try {
+    const [rows] =
+      await pool.execute(
+        "SELECT id FROM pois WHERE id = ?",
+        [poiId]
+      );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Không tìm thấy POI.",
+      });
+    }
+
+    queuePoiAudioGeneration(poiId);
+
+    return res.status(202).json({
+      success: true,
+      message:
+        "Đang tạo audio cho POI, tải lại sau ít phút để xem kết quả.",
+    });
+  } catch (error) {
+    return next(error);
+  }
+}

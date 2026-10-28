@@ -215,3 +215,43 @@ export async function grantDeviceAccess(req, res, next) {
     return next(error);
   }
 }
+
+/*
+ * POST /api/admin/devices/:deviceId/revoke
+ * Thu hồi mọi quyền tour đang hiệu lực của thiết bị (cấp nhầm, cần chặn).
+ */
+export async function revokeDeviceAccess(req, res, next) {
+  try {
+    const deviceId = String(req.params.deviceId || "").toLowerCase();
+
+    if (!DEVICE_ID_PATTERN.test(deviceId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Mã thiết bị không hợp lệ.",
+      });
+    }
+
+    const [result] = await pool.execute(
+      `
+        UPDATE session_authorizations
+        SET status = 'revoked', revoked_at = CURRENT_TIMESTAMP
+        WHERE device_id = ? AND status = 'active'
+      `,
+      [deviceId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Thiết bị không có quyền tour nào đang hiệu lực.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Đã thu hồi quyền tour của thiết bị.",
+    });
+  } catch (error) {
+    return next(error);
+  }
+}

@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Trash2,
   UserRound,
+  Volume2,
   Users,
   X,
   XCircle,
@@ -39,6 +40,7 @@ import {
   deleteAdminPoi,
   getAdminPois,
   getAdminUsers,
+  regeneratePoiAudio,
   reviewPoi,
   updateAdminPoi,
   updateAdminUserRole,
@@ -605,7 +607,22 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
   );
 }
 
-function PoiCard({ poi, onEdit, onDelete, onReview }) {
+function PoiCard({ poi, onEdit, onDelete, onReview, onRegenerateAudio }) {
+  const [audioQueued, setAudioQueued] = useState(false);
+
+  // App chỉ phát mp3 do pipeline tạo, nên POI thiếu audio sẽ không có tiếng.
+  const audioCount = LANGUAGES.filter((lang) =>
+    String(poi.audio?.[lang.code] || "").trim(),
+  ).length;
+
+  const audioComplete = audioCount === LANGUAGES.length;
+
+  async function regenerateAudio() {
+    if (await onRegenerateAudio(poi.id)) {
+      setAudioQueued(true);
+    }
+  }
+
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       {/* Header */}
@@ -669,7 +686,24 @@ function PoiCard({ poi, onEdit, onDelete, onReview }) {
           <span className="rounded-lg bg-slate-100 px-2.5 py-1.5">
             Bán kính: {poi.radius}m
           </span>
+
+          <span
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold ${
+              audioComplete
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700"
+            }`}
+          >
+            <Volume2 size={13} />
+            Audio {audioCount}/{LANGUAGES.length}
+          </span>
         </div>
+
+        {audioQueued && (
+          <p className="mt-3 text-xs text-slate-500">
+            Đang tạo audio, bấm tải lại sau ít phút để xem kết quả.
+          </p>
+        )}
 
         {/* Actions */}
 
@@ -713,6 +747,19 @@ function PoiCard({ poi, onEdit, onDelete, onReview }) {
             <Trash2 size={15} />
             Xóa
           </button>
+
+          {!audioComplete && (
+            <button
+              onClick={() => void regenerateAudio()}
+
+              disabled={audioQueued}
+
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 px-3.5 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
+            >
+              <Volume2 size={15} />
+              Tạo audio còn thiếu
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -1418,6 +1465,18 @@ return [
     }
   }
 
+  async function handleRegenerateAudio(id) {
+    try {
+      await regeneratePoiAudio(token, id);
+
+      return true;
+    } catch (err) {
+      setError(err.message || "Không thể tạo audio.");
+
+      return false;
+    }
+  }
+
   function handleSaved(poi) {
     setModal(null);
 
@@ -1773,7 +1832,7 @@ return [
                     <StatCard
                       icon={Users}
 
-                      label="Tổng Users"
+                      label="Tài khoản"
 
                       value={monitoring.stats.users.total}
                     />
@@ -1978,7 +2037,7 @@ return [
                               </p>
 
                               <p className="text-sm text-slate-500">
-                                User {payment.userId} · Session{" "}
+                                {payment.userId ? `User ${payment.userId}` : "Khách"} · Session{" "}
                                 {payment.sessionId}
                               </p>
                             </div>
@@ -2164,6 +2223,8 @@ return [
                           onDelete={handleDelete}
 
                           onReview={handleReview}
+
+                          onRegenerateAudio={handleRegenerateAudio}
                         />
                       ))}
                     </div>

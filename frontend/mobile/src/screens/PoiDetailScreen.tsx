@@ -1,7 +1,5 @@
 import { useEffect } from "react";
 
-import { useAudioPlayer } from "expo-audio";
-
 import {
   View,
   Text,
@@ -22,9 +20,10 @@ import { getTranslations } from "../translations";
 import { usePoiStore } from "../store/usePoiStore";
 
 import {
-  speakText,
-  stopSpeaking,
-} from "../services/nativeTts";
+  hasPoiAudio,
+  playPoiNarration,
+  stopPoiNarration,
+} from "../services/narrationService";
 
 type RouteParams = {
   poiId: number;
@@ -51,33 +50,6 @@ function resolveImageUrl(
   }
 
   const value = image.trim();
-
-  if (!value) {
-    return null;
-  }
-
-  if (
-    value.startsWith("http://") ||
-    value.startsWith("https://")
-  ) {
-    return value;
-  }
-
-  if (value.startsWith("/")) {
-    return `${API_URL}${value}`;
-  }
-
-  return `${API_URL}/${value}`;
-}
-
-function resolveAudioUrl(
-  audio?: string | null
-) {
-  if (!audio) {
-    return null;
-  }
-
-  const value = audio.trim();
 
   if (!value) {
     return null;
@@ -131,193 +103,43 @@ export default function PoiDetailScreen() {
 
   /* ================= AUDIO ================= */
 
-  const audioUrl = resolveAudioUrl(
-    poi?.audio?.[language]
+  /*
+   * Dùng chung kênh phát với thuyết minh GPS
+   * nên không bao giờ có hai giọng đọc chồng nhau.
+   */
+  const hasAudio = hasPoiAudio(
+    poi,
+    language
   );
-
-  const player = useAudioPlayer(
-    audioUrl,
-    {
-      downloadFirst: true,
-    }
-  );
-
-  /* ================= AUTO PLAY ================= */
 
   useEffect(() => {
     if (!autoPlay || !poi) {
       return;
     }
 
-    const description =
-      poi.description[language] ??
-      poi.description.vi ??
-      Object.values(
-        poi.description
-      )[0] ??
-      "";
-
-    /*
-     * Ưu tiên audio MP3 đã được
-     * generate từ backend.
-     */
-    if (audioUrl) {
-      console.log(
-        "POI AUDIO PLAY:",
-        poi.id,
-        language,
-        audioUrl
-      );
-
-      stopSpeaking();
-
-      try {
-        player.play();
-      } catch (error) {
-        console.error(
-          "POI AUDIO PLAY ERROR:",
-          error
-        );
-
-        if (description) {
-          console.log(
-            "POI AUDIO FALLBACK TTS:",
-            poi.id,
-            language
-          );
-
-          speakText(
-            description,
-            language
-          );
-        }
-      }
-
-      return () => {
-        try {
-          player.pause();
-        } catch {
-          // ignore
-        }
-
-        stopSpeaking();
-      };
-    }
-
-    /*
-     * Không có audio MP3
-     * → fallback native TTS.
-     */
-    if (!description) {
-      return;
-    }
-
-    console.log(
-      "POI AUDIO FALLBACK TTS:",
-      poi.id,
-      language
-    );
-
-    speakText(
-      description,
+    void playPoiNarration(
+      poi,
       language
     );
 
     return () => {
-      stopSpeaking();
+      stopPoiNarration();
     };
-  }, [
-    autoPlay,
-    poi,
-    language,
-    audioUrl,
-    player,
-  ]);
-
-  /* ================= PLAY ================= */
+  }, [autoPlay, poi, language]);
 
   const handlePlayAudio = () => {
     if (!poi) {
       return;
     }
 
-    if (audioUrl) {
-      console.log(
-        "MANUAL POI AUDIO PLAY:",
-        poi.id,
-        language,
-        audioUrl
-      );
-
-      stopSpeaking();
-
-      try {
-        player.play();
-      } catch (error) {
-        console.error(
-          "MANUAL POI AUDIO ERROR:",
-          error
-        );
-
-        const description =
-          poi.description[language] ??
-          poi.description.vi ??
-          Object.values(
-            poi.description
-          )[0] ??
-          "";
-
-        if (description) {
-          console.log(
-            "MANUAL POI AUDIO FALLBACK TTS:",
-            poi.id,
-            language
-          );
-
-          speakText(
-            description,
-            language
-          );
-        }
-      }
-
-      return;
-    }
-
-    const description =
-      poi.description[language] ??
-      poi.description.vi ??
-      Object.values(
-        poi.description
-      )[0] ??
-      "";
-
-    if (!description) {
-      return;
-    }
-
-    console.log(
-      "MANUAL POI AUDIO FALLBACK TTS:",
-      poi.id,
-      language
-    );
-
-    speakText(
-      description,
+    void playPoiNarration(
+      poi,
       language
     );
   };
 
-  /* ================= STOP ================= */
-
   const handleStopAudio = () => {
-    try {
-      player.pause();
-    } catch {
-      // ignore
-    }
-
-    stopSpeaking();
+    stopPoiNarration();
   };
 
   /* ================= NOT FOUND ================= */
@@ -562,7 +384,10 @@ export default function PoiDetailScreen() {
                 styles.audioButton,
                 pressed &&
                   styles.buttonPressed,
+                !hasAudio &&
+                  styles.buttonDisabled,
               ]}
+              disabled={!hasAudio}
               onPress={
                 handlePlayAudio
               }
@@ -1094,6 +919,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
     color: "#222",
+  },
+
+  buttonDisabled: {
+    opacity: 0.45,
   },
 
   buttonPressed: {
