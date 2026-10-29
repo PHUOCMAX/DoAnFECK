@@ -68,7 +68,7 @@ const EMPTY_FORM = {
 
   longitude: "",
 
-  radius: "100",
+  radius: "50",
 
   image: "",
 
@@ -93,7 +93,7 @@ function clonePoiToForm(poi) {
 
     longitude: String(poi.longitude ?? ""),
 
-    radius: String(poi.radius ?? "100"),
+    radius: String(poi.radius ?? "50"),
 
     image: poi.image || "",
 
@@ -229,8 +229,8 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
 
     setError("");
 
-    if (Number(form.radius) < 0) {
-      setError("Bán kính không được nhỏ hơn 0.");
+    if (Number(form.radius) < 0 || Number(form.radius) > 50) {
+      setError("Bán kính chỉ được từ 0 đến 50 mét.");
 
       return;
     }
@@ -429,7 +429,7 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
             {/* Radius */}
 
             <InputField
-              label="Radius (m)"
+              label="Radius (m, 0-50)"
 
               type="number"
 

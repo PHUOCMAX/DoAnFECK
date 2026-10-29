@@ -234,12 +234,12 @@ export function validatePoiPayload(payload = {}) {
 
   if (
     !Number.isInteger(radius) ||
-    radius < 10 ||
-    radius > 1_000
+    radius < 0 ||
+    radius > 50
   ) {
     return {
       error:
-        "Bán kính check-in phải từ 10 đến 1000 mét.",
+        "Bán kính check-in phải từ 0 đến 50 mét.",
     };
   }
 

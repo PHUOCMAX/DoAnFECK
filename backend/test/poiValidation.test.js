@@ -13,7 +13,7 @@ const validPoi = {
   category: "tourism",
   latitude: 10.7798,
   longitude: 106.699,
-  radius: 100,
+  radius: 50,
 };
 
 test("normalizes missing POI translations to supported languages", () => {
@@ -53,13 +53,15 @@ test("rejects invalid POI coordinates and radius", () => {
     "Kinh độ phải nằm trong khoảng -180 đến 180."
   );
 
-  assert.equal(
-    validatePoiPayload({
-      ...validPoi,
-      radius: 5,
-    }).error,
-    "Bán kính check-in phải từ 10 đến 1000 mét."
-  );
+  for (const radius of [-1, 51]) {
+    assert.equal(
+      validatePoiPayload({
+        ...validPoi,
+        radius,
+      }).error,
+      "Bán kính check-in phải từ 0 đến 50 mét."
+    );
+  }
 });
 
 test("preserves optional image and multilingual audio", () => {
