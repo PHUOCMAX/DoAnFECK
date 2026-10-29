@@ -229,6 +229,12 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
 
     setError("");
 
+    if (Number(form.radius) < 0) {
+      setError("Bán kính không được nhỏ hơn 0.");
+
+      return;
+    }
+
     setSaving(true);
 
     const metadata = {
