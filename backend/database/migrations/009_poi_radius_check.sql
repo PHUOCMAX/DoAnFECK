@@ -6,5 +6,20 @@ UPDATE `pois`
 SET `radius` = 50
 WHERE `radius` > 50;
 
-ALTER TABLE `pois`
-  ADD CONSTRAINT `chk_pois_radius` CHECK (`radius` BETWEEN 0 AND 50);
+-- Chỉ thêm khi chưa có (database đã thêm ràng buộc bằng tay trước đó).
+SET @has_check := (
+  SELECT COUNT(*)
+  FROM information_schema.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE()
+    AND CONSTRAINT_NAME = 'chk_pois_radius'
+);
+
+SET @sql := IF(
+  @has_check = 0,
+  'ALTER TABLE `pois` ADD CONSTRAINT `chk_pois_radius` CHECK (`radius` BETWEEN 0 AND 50)',
+  'DO 0'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

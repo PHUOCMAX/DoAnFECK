@@ -26,10 +26,22 @@ dữ liệu shared.
 3. Tạo database đã khai báo trong `DB_NAME`, rồi chạy migration:
 
    ```bash
-   mysql -u <user> -p <database_name> < backend/database/migrations/001_create_users.sql
-   mysql -u <user> -p <database_name> < backend/database/migrations/002_create_pois.sql
-   mysql -u <user> -p <database_name> < backend/database/migrations/003_add_poi_approval.sql
+   npm --prefix backend run migrate
    ```
+
+   Chạy bằng Docker thì dùng:
+
+   ```bash
+   docker exec multilingual-tour-guide-backend npm run migrate
+   ```
+
+   Lệnh này chạy các file trong `backend/database/migrations` chưa chạy và ghi
+   lại vào bảng `schema_migrations`, nên chạy lại nhiều lần cũng được. Database
+   trống sẽ được tạo từ `backend/database/init.sql` trước.
+
+   Muốn đổi cấu trúc database: tạo file migration mới với số tiếp theo (ví dụ
+   `011_....sql`) rồi chạy lại lệnh trên. Không sửa bảng bằng tay và không sửa
+   file migration đã có, để máy nào chạy cũng ra cùng một database.
 
 4. Tạo `frontend/mobile/.env` từ `frontend/mobile/.env.example` và đặt
    `EXPO_PUBLIC_API_URL` theo địa chỉ API có thể truy cập từ thiết bị.
