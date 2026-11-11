@@ -37,21 +37,25 @@ test("normalizes missing POI translations to supported languages", () => {
 });
 
 test("rejects invalid POI coordinates and radius", () => {
-  assert.equal(
-    validatePoiPayload({
-      ...validPoi,
-      latitude: 91,
-    }).error,
-    "Vĩ độ phải nằm trong khoảng -90 đến 90."
-  );
+  for (const latitude of [91, 0, -10]) {
+    assert.equal(
+      validatePoiPayload({
+        ...validPoi,
+        latitude,
+      }).error,
+      "Vĩ độ phải lớn hơn 0 và tối đa 90."
+    );
+  }
 
-  assert.equal(
-    validatePoiPayload({
-      ...validPoi,
-      longitude: -181,
-    }).error,
-    "Kinh độ phải nằm trong khoảng -180 đến 180."
-  );
+  for (const longitude of [181, 0, -10]) {
+    assert.equal(
+      validatePoiPayload({
+        ...validPoi,
+        longitude,
+      }).error,
+      "Kinh độ phải lớn hơn 0 và tối đa 180."
+    );
+  }
 
   for (const radius of [-1, 51]) {
     assert.equal(

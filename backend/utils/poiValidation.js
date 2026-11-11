@@ -212,23 +212,23 @@ export function validatePoiPayload(payload = {}) {
 
   if (
     !Number.isFinite(latitude) ||
-    latitude < -90 ||
+    latitude <= 0 ||
     latitude > 90
   ) {
     return {
       error:
-        "Vĩ độ phải nằm trong khoảng -90 đến 90.",
+        "Vĩ độ phải lớn hơn 0 và tối đa 90.",
     };
   }
 
   if (
     !Number.isFinite(longitude) ||
-    longitude < -180 ||
+    longitude <= 0 ||
     longitude > 180
   ) {
     return {
       error:
-        "Kinh độ phải nằm trong khoảng -180 đến 180.",
+        "Kinh độ phải lớn hơn 0 và tối đa 180.",
     };
   }
 

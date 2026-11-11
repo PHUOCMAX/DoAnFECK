@@ -235,6 +235,12 @@ function PoiFormModal({ editingPoi, onClose, onSaved }) {
       return;
     }
 
+    if (Number(form.latitude) <= 0 || Number(form.longitude) <= 0) {
+      setError("Vĩ độ và kinh độ phải lớn hơn 0.");
+
+      return;
+    }
+
     setSaving(true);
 
     const metadata = {
