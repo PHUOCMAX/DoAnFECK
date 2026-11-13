@@ -44,6 +44,9 @@ jobs:
       - name: Web lint
         run: npm --prefix frontend/web run lint
 
+      - name: Web tests
+        run: npm --prefix frontend/web run test
+
       - name: Web build
         env:
           VITE_MAPTILER_KEY: ${{ secrets.VITE_MAPTILER_KEY }}

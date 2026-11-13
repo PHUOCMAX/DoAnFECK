@@ -208,7 +208,12 @@ export function validatePoiPayload(payload = {}) {
 
   const latitude = Number(payload.latitude);
   const longitude = Number(payload.longitude);
-  const radius = Number(payload.radius);
+  // Để trống thì Number("") = 0, nên phải chặn riêng, nếu không sẽ lọt
+  // thành bán kính 0.
+  const radius =
+    payload.radius === "" || payload.radius == null
+      ? Number.NaN
+      : Number(payload.radius);
 
   if (
     !Number.isFinite(latitude) ||

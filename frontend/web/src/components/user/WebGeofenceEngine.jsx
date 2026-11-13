@@ -20,8 +20,12 @@ import {
   enqueuePoiNarration,
   stopNarration,
 } from "../../services/narrationService";
-
-const DEFAULT_RADIUS = 100;
+import {
+  haversineMeters,
+  isInCooldown,
+  poiRadius,
+  selectBestPoi,
+} from "../../utils/geo";
 
 /*
  * Theo flow của thầy:
@@ -47,40 +51,6 @@ const GPS_THROTTLE_MS = 5000;
  * Không đọc lại cùng một POI liên tục.
  */
 const NARRATION_COOLDOWN_MS = 5 * 60 * 1000;
-
-function distanceMeters(
-  lat1,
-  lon1,
-  lat2,
-  lon2
-) {
-  const R = 6371000;
-
-  const dLat =
-    ((lat2 - lat1) * Math.PI) / 180;
-
-  const dLon =
-    ((lon2 - lon1) * Math.PI) / 180;
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(
-      (lat1 * Math.PI) / 180
-    ) *
-      Math.cos(
-        (lat2 * Math.PI) / 180
-      ) *
-      Math.sin(dLon / 2) ** 2;
-
-  return (
-    2 *
-    R *
-    Math.atan2(
-      Math.sqrt(a),
-      Math.sqrt(1 - a)
-    )
-  );
-}
 
 export default function WebGeofenceEngine() {
   const { language } = useLanguage();
@@ -313,35 +283,6 @@ export default function WebGeofenceEngine() {
    * 1. priority nếu có
    * 2. distance gần hơn
    */
-  function selectBestPoi(
-    candidates
-  ) {
-    if (!candidates.length) {
-      return null;
-    }
-
-    const sorted = [...candidates].sort(
-      (a, b) => {
-        const priorityA =
-          Number(a.poi.priority) || 0;
-
-        const priorityB =
-          Number(b.poi.priority) || 0;
-
-        if (
-          priorityA !== priorityB
-        ) {
-          return priorityB - priorityA;
-        }
-
-        return (
-          a.distance - b.distance
-        );
-      }
-    );
-
-    return sorted[0] || null;
-  }
 
   /*
    * ==========================================
@@ -397,7 +338,7 @@ export default function WebGeofenceEngine() {
       }
 
       const distance =
-        distanceMeters(
+        haversineMeters(
           currentPosition.latitude,
           currentPosition.longitude,
           latitude,
@@ -414,8 +355,11 @@ export default function WebGeofenceEngine() {
         ) || 0;
 
       if (
-        Date.now() - lastNarrated <
-        NARRATION_COOLDOWN_MS
+        isInCooldown(
+          lastNarrated,
+          Date.now(),
+          NARRATION_COOLDOWN_MS
+        )
       ) {
         continue;
       }
@@ -582,11 +526,10 @@ export default function WebGeofenceEngine() {
       Number(poi.longitude);
 
     const radius =
-      Number(poi.radius) ||
-      DEFAULT_RADIUS;
+      poiRadius(poi);
 
     const distance =
-      distanceMeters(
+      haversineMeters(
         currentPosition.latitude,
         currentPosition.longitude,
         poiLat,
@@ -821,11 +764,10 @@ export default function WebGeofenceEngine() {
         }
 
         const radius =
-          Number(poi.radius) ||
-          DEFAULT_RADIUS;
+          poiRadius(poi);
 
         const distance =
-          distanceMeters(
+          haversineMeters(
             latitude,
             longitude,
             poiLat,

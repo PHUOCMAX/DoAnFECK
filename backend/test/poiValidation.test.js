@@ -68,6 +68,34 @@ test("rejects invalid POI coordinates and radius", () => {
   }
 });
 
+test("accepts POI values on the allowed boundaries", () => {
+  for (const radius of [0, 50]) {
+    assert.equal(validatePoiPayload({ ...validPoi, radius }).error, undefined);
+  }
+
+  assert.equal(
+    validatePoiPayload({ ...validPoi, latitude: 90, longitude: 180 }).error,
+    undefined
+  );
+});
+
+test("rejects radius that is not a whole number", () => {
+  for (const radius of [10.5, "abc", "", null]) {
+    assert.equal(
+      validatePoiPayload({ ...validPoi, radius }).error,
+      "Bán kính check-in phải từ 0 đến 50 mét."
+    );
+  }
+});
+
+test("rejects missing Vietnamese name and unknown category", () => {
+  assert.ok(validatePoiPayload({ ...validPoi, name: { vi: "  " } }).error);
+  assert.equal(
+    validatePoiPayload({ ...validPoi, category: "hotel" }).error,
+    "Loại địa điểm không hợp lệ."
+  );
+});
+
 test("preserves optional image and multilingual audio", () => {
   const result = validatePoiPayload({
     ...validPoi,

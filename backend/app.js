@@ -47,6 +47,10 @@ import {
   visitorColumns,
   visitorCondition,
 } from "./middleware/visitorMiddleware.js";
+import {
+  monitoringFilter,
+  resolveMonitoringRange,
+} from "./utils/monitoringRange.js";
 
 /* =========================================================
    HELPERS
@@ -908,29 +912,14 @@ async function updateSessionPrice(req, res, next) {
 // ADMIN MONITORING
 // =========================================================
 
-// Mốc bắt đầu (UTC) của từng khoảng thời gian, tính theo ngày giờ Việt Nam.
-// Chỉ dùng chuỗi trong danh sách này để ghép vào SQL.
-const VN_TODAY = "DATE(CONVERT_TZ(NOW(), '+00:00', '+07:00'))";
-
-const MONITORING_RANGES = {
-  today: `CONVERT_TZ(${VN_TODAY}, '+07:00', '+00:00')`,
-  "7d": `CONVERT_TZ(${VN_TODAY} - INTERVAL 6 DAY, '+07:00', '+00:00')`,
-  month: `CONVERT_TZ(DATE_FORMAT(${VN_TODAY}, '%Y-%m-01'), '+07:00', '+00:00')`,
-  all: null,
-};
-
 async function getMonitoringStats(req, res, next) {
   try {
-    const range = Object.hasOwn(MONITORING_RANGES, req.query.range)
-      ? req.query.range
-      : "all";
-
-    const since = MONITORING_RANGES[range];
+    const range = resolveMonitoringRange(req.query.range);
 
     // Lọc theo thời gian cho số liệu phát sinh (tour, thanh toán, doanh thu,
     // check-in). Số liệu trạng thái hiện tại (POI, tài khoản, đang trong tour,
     // có quyền tour) luôn tính trên toàn bộ dữ liệu.
-    const within = (column) => (since ? `${column} >= ${since}` : "1 = 1");
+    const within = monitoringFilter(range);
 
     const [
       [users],
