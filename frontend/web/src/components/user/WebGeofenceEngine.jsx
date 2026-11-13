@@ -113,6 +113,11 @@ export default function WebGeofenceEngine() {
   const lastPositionRef = useRef(null);
 
   /*
+   * Hàm kiểm tra geofence của lần theo dõi GPS hiện tại.
+   */
+  const checkGeofenceRef = useRef(null);
+
+  /*
    * GPS timestamp được xử lý gần nhất.
    */
   const lastGpsProcessedAt = useRef(0);
@@ -129,6 +134,20 @@ export default function WebGeofenceEngine() {
    */
   useEffect(() => {
     poisRef.current = pois;
+
+    /*
+     * GPS có thể báo vị trí trước khi POI tải xong. Khi đó du khách
+     * đang đứng sẵn trong vùng POI sẽ không được thuyết minh cho tới
+     * khi GPS báo vị trí mới, nên kiểm tra lại ngay với vị trí đã có.
+     */
+    const position = lastPositionRef.current;
+
+    if (position && pois.length) {
+      checkGeofenceRef.current?.(
+        position.latitude,
+        position.longitude
+      );
+    }
   }, [pois]);
 
   /*
@@ -735,6 +754,16 @@ export default function WebGeofenceEngine() {
         longitude
       );
 
+      checkGeofence(
+        latitude,
+        longitude
+      );
+    }
+
+    function checkGeofence(
+      latitude,
+      longitude
+    ) {
       const currentPois =
         poisRef.current || [];
 
@@ -853,6 +882,9 @@ export default function WebGeofenceEngine() {
       }
     }
 
+    checkGeofenceRef.current =
+      checkGeofence;
+
     function handleError(
       error
     ) {
@@ -895,6 +927,8 @@ export default function WebGeofenceEngine() {
       processingPois.current.clear();
 
       lastPositionRef.current = null;
+
+      checkGeofenceRef.current = null;
 
       lastGpsProcessedAt.current = 0;
 
